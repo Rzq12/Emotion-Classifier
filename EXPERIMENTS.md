@@ -79,4 +79,42 @@ cleaning dan pembuangan teks terlalu pendek (`min_chars=3`). Test 550 → 548.
 
 ## Fase 2 — Training & Tracking
 
-*(belum dikerjakan)*
+### Infrastruktur
+
+- **Experiment tracking:** MLflow dengan backend **SQLite** (`sqlite:///mlflow.db`).
+  File store dipensiunkan di MLflow 3.x dan model registry butuh backend DB,
+  jadi SQLite dipilih (lokal, ringan, mendukung registry untuk "production candidate").
+- **Metrik utama:** **F1-macro** (bukan accuracy) karena imbalance tajam. Dicatat
+  juga per-kelas F1 + confusion matrix (CSV + heatmap PNG) sebagai artifact.
+- Modul: `src/training/{dataset,metrics,baseline,train_indobert}.py`,
+  `src/tracking/{mlflow_utils,registry}.py`. Hyperparameter di `configs/training.yaml`.
+
+### Baseline — TF-IDF + Logistic Regression (wajib)
+
+Konfigurasi: ngram (1,2), min_df=2, max_features=20k, sublinear_tf, `class_weight="balanced"`.
+
+| Metrik (test) | Nilai |
+|---|---|
+| Accuracy | 0.836 |
+| **F1-macro** | **0.752** |
+| F1 anger | 0.621 |
+| F1 happiness | 0.946 |
+| F1 sadness | 0.689 |
+
+Observasi: kelas mayoritas `happiness` sangat mudah (F1 0.95); `anger` (minoritas)
+adalah yang tersulit (F1 0.62) meski sudah `class_weight="balanced"`. Ini menetapkan
+**ambang batas** yang harus dilampaui IndoBERT pada F1-macro.
+
+### IndoBERT fine-tuning
+
+- Model: `indobenchmark/indobert-base-p1`, weighted cross-entropy (inverse-frequency)
+  untuk imbalance, max_length=128, 3 epoch, lr=2e-5.
+- Pipeline tervalidasi end-to-end via smoke test (64 sampel, 1 epoch): model
+  ter-download, training/eval/predict/log/eksport berjalan benar.
+- **Catatan lingkungan:** environment hanya CPU (`torch 2.2.0+cpu`, CUDA tidak
+  tersedia). Full training ~6.4 s/step → ~40 menit untuk 3 epoch. Dijalankan
+  terpisah/background; hasil akhir & perbandingan vs baseline diisi setelah selesai.
+- Eksperimen variasi (lr, max_length, class weighting on/off, augmentasi) dapat
+  dijalankan dengan mengubah `configs/training.yaml` — semua otomatis ter-log ke MLflow.
+- Pemilihan & registrasi model terbaik: `python -m src.tracking.registry --register`
+  (memilih run dengan `test_f1_macro` tertinggi, tag `production-candidate`).

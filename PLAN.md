@@ -33,14 +33,15 @@ Dokumen ini adalah sumber kebenaran progres proyek. Update checklist setiap sele
 
 ## Fase 2 — Model Training & Experiment Tracking (≈ 5-7 hari)
 
-- [ ] Bangun baseline: TF-IDF + Logistic Regression (atau SVM), log ke MLflow sebagai eksperimen pertama.
-- [ ] Setup fine-tuning IndoBERT (HuggingFace Transformers) untuk klasifikasi sentiment.
-- [ ] Jalankan minimal 5 variasi eksperimen (learning rate, max_length, augmentasi data, class weighting untuk imbalance, dll), semua ter-log MLflow.
-- [ ] Evaluasi tiap eksperimen: accuracy, F1-macro, confusion matrix — bandingkan dengan baseline.
-- [ ] Pilih model terbaik, tandai sebagai "production candidate" di MLflow registry.
-- [ ] (Opsional) Fine-tune juga untuk emotion classification jika waktu memungkinkan.
-- [ ] Export model final ke format siap serving (HF format / TorchScript / ONNX jika perlu optimasi).
-- [ ] Push model artifact ke HF Hub model repo (untuk dipull saat deploy, bukan disimpan di git).
+- [x] Bangun baseline: TF-IDF + Logistic Regression, log ke MLflow (test F1-macro=0.752).
+- [x] Setup fine-tuning IndoBERT (HuggingFace Transformers) untuk klasifikasi emotion — `src/training/train_indobert.py` (weighted CE untuk imbalance), tervalidasi via smoke test.
+- [x] Config hyperparameter di `configs/training.yaml` (bukan hardcode).
+- [~] Jalankan variasi eksperimen — infrastruktur siap (ubah config → auto-log MLflow). Full run IndoBERT pertama dijalankan; variasi tambahan menyusul (CPU-only, ~40 mnt/run).
+- [x] Evaluasi: accuracy, F1-macro, per-class F1, confusion matrix (artifact MLflow).
+- [x] Pemilihan & registrasi model terbaik: `src/tracking/registry.py` (`--register`, tag production-candidate).
+- [ ] (Opsional) Emotion sudah jadi tugas utama (bukan layer terpisah).
+- [ ] Export model final ke format serving — `save_model` + tokenizer ke `output_dir`, ter-log ke MLflow.
+- [ ] Push model artifact ke HF Hub — menyusul (Fase 4/5, perlu kredensial HF).
 
 **Output Fase 2:** Model classifier final + 5+ eksperimen tercatat rapi di MLflow.
 
