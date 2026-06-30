@@ -16,7 +16,7 @@ Mendesain sistem yang (a) ringan dijalankan di infra gratis/murah (HF Spaces CPU
 ```
                          ┌─────────────────────────┐
                          │      React Web App      │
-                         │   (Vercel/Netlify)      │
+                         │   (Vercel)      │
                          │  Dashboard | Insight |   │
                          │  Chat | Classify Demo    │
                          └────────────┬─────────────┘
@@ -66,7 +66,7 @@ Mendesain sistem yang (a) ringan dijalankan di infra gratis/murah (HF Spaces CPU
 
 ### 3.1 Classifier Service
 - **Input:** teks review (string).
-- **Proses:** tokenisasi IndoBERT tokenizer → forward pass model fine-tuned → softmax → label + confidence.
+- **Proses:** tokenisasi IndoBERT tokenizer → forward pass model fine-tuned → softmax → label emotion (`anger`/`happiness`/`sadness`) + confidence.
 - **Model loading:** model di-pull dari HF Hub model repo saat container start (cache di image layer atau volume agar tidak re-download tiap request).
 - **Optimasi:** pertimbangkan quantization (dynamic quantization PyTorch atau ONNX) jika cold start/latency jadi masalah di CPU-only HF Spaces.
 

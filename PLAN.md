@@ -6,12 +6,12 @@ Dokumen ini adalah sumber kebenaran progres proyek. Update checklist setiap sele
 
 ## Fase 0 — Setup Project (≈ 2-3 hari)
 
-- [ ] Buat repo GitHub `indo-review-intelligence`, init struktur folder sesuai `CLAUDE.md`.
-- [ ] Setup environment (Python venv/poetry, `requirements.txt` awal).
-- [ ] Setup DVC + remote DagsHub (buat akun, connect repo).
-- [ ] Setup MLflow tracking (lokal dulu, atau pakai DagsHub MLflow remote sekalian biar terhubung).
-- [ ] Buat skeleton `web/` dengan Vite + React, pastikan `npm run dev` jalan.
-- [ ] Tulis README awal (problem statement sementara, akan dilengkapi belakangan).
+- [x] Init struktur folder sesuai `CLAUDE.md` (git init lokal; repo GitHub menyusul).
+- [x] Setup environment (conda env `trading`, Python 3.11, `requirements.txt` awal) + `pyproject.toml` (ruff/black/pytest).
+- [ ] Setup DVC + remote DagsHub — **tertunda**: `dvc` belum terpasang di environment.
+- [ ] Setup MLflow tracking — digeser ke Fase 2 (saat training mulai).
+- [~] Skeleton `web/` — **ditunda ke Fase 5** secara sengaja (placeholder + `.env.example` dibuat) agar tidak menarik dependency npm sebelum layer data siap.
+- [x] Tulis README awal + `.env.example` backend & frontend.
 
 **Output Fase 0:** Repo siap dikembangkan, tracking infra sudah connect.
 
@@ -19,13 +19,13 @@ Dokumen ini adalah sumber kebenaran progres proyek. Update checklist setiap sele
 
 ## Fase 1 — Data Acquisition & Preprocessing (≈ 4-6 hari)
 
-- [ ] Kumpulkan/extend dataset review Halodoc (cari dataset publik existing dulu sebelum scrape sendiri).
-- [ ] (Opsional) Scrape tambahan review Gojek/Tokopedia dari Play Store (pakai `google-play-scraper` atau sejenis) untuk variasi domain.
-- [ ] Eksplorasi data (EDA) di notebook: distribusi label, panjang teks, duplikasi, noise.
-- [ ] Tentukan skema label final: sentiment (positive/negative/neutral) wajib; emotion (marah/sedih/senang/dll) opsional stretch.
-- [ ] Bangun preprocessing pipeline: cleaning teks, normalisasi slang/typo Indo, handling emoji.
-- [ ] Split data train/val/test, simpan ke `data/processed/`.
-- [ ] `dvc add` dataset, commit & push ke DagsHub remote.
+- [x] Dataset review (emotion, domain Halodoc/Gojek) tersedia di `Dataset/` — tidak perlu scraping tambahan untuk fase ini.
+- [ ] (Opsional) Scrape tambahan review Gojek/Tokopedia — di-skip (data existing cukup).
+- [x] EDA ringkas: distribusi label, panjang teks, duplikasi, casing label (dicatat di `EXPERIMENTS.md`).
+- [x] Skema label final: **emotion 3-kelas** (`anger`/`happiness`/`sadness`), tanpa netral — mengikuti dataset nyata (reframe dari sentiment, disetujui).
+- [x] Preprocessing pipeline: cleaning, normalisasi slang Indo, handling emoji (`src/data/preprocessing.py`, `src/data/slang_dict.py`).
+- [x] Split data train/val (test sudah terpisah), simpan ke `data/processed/`.
+- [ ] `dvc add` dataset, push DagsHub — **tertunda** (dvc belum terpasang).
 
 **Output Fase 1:** Dataset bersih, ter-version, siap training. Checkpoint: tulis ringkat di `EXPERIMENTS.md` soal keputusan labeling/cleaning.
 
@@ -118,3 +118,4 @@ Dokumen ini adalah sumber kebenaran progres proyek. Update checklist setiap sele
 *(isi log singkat tiap sesi kerja di sini — tanggal, apa yang dikerjakan, blocker jika ada)*
 
 - 2026-06-30: Dokumen PRD/CLAUDE/PLAN dibuat. Belum mulai eksekusi.
+- 2026-06-30: **Fase 0 & Fase 1 dieksekusi.** Reframe sentiment → emotion (3 kelas, tanpa netral) disetujui. Scaffold repo, `requirements.txt`, `pyproject.toml`, `.env.example` (BE/FE), README, `.gitignore`. Pipeline data (`src/data/`) + 21 unit test (semua hijau) + lint ruff bersih. Output `data/processed/{train,val,test}.csv` (1798/318/548). Blocker minor: `dvc` & GitHub remote belum di-setup (digeser). Detail di `EXPERIMENTS.md`.
