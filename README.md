@@ -29,7 +29,7 @@ dan menjawab pertanyaan tim produk berbasis data review nyata.
 | Vector store | ChromaDB |
 | Embedding | sentence-transformers (multilingual MiniLM) |
 | LLM | Groq / Gemini / Ollama |
-| API | FastAPI (Fase 4) |
+| API | FastAPI |
 | Frontend | React + Vite (Fase 5) |
 
 ## Struktur Repo
@@ -93,6 +93,24 @@ python -m src.rag.build_index --config configs/rag.yaml   # embed review ke Chro
 Insight & chatbot diakses lewat `InsightGenerator` / `ChatResponder`
 (`src/rag/`). Pilih provider LLM via `LLM_PROVIDER` di `.env`. Retrieval berjalan
 tanpa API key; generasi insight/chat memerlukan key LLM.
+
+### 4. API (FastAPI)
+
+```bash
+uvicorn src.api.main:app --host 0.0.0.0 --port 7860
+```
+
+Endpoint:
+
+| Method | Path | Fungsi |
+|---|---|---|
+| GET | `/health` | Status model, vector DB, LLM provider |
+| POST | `/classify` | `{text}` → `{label, confidence}` |
+| POST | `/insight` | `{query}` → ringkasan terstruktur (rate-limited) |
+| POST | `/chat` | `{question}` → `{answer, sources}` (rate-limited) |
+
+Docs interaktif tersedia di `/docs`. CORS dan rate limit dikonfigurasi via env
+(`CORS_ALLOW_ORIGINS`, `RATE_LIMIT_PER_MINUTE`). Build image: `docker build -t indo-review-api .`
 
 ## Testing & Linting
 
