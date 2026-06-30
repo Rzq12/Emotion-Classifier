@@ -49,13 +49,13 @@ Dokumen ini adalah sumber kebenaran progres proyek. Update checklist setiap sele
 
 ## Fase 3 — RAG & LLM Insight Layer (≈ 5-7 hari)
 
-- [ ] Setup ChromaDB lokal, bangun pipeline embedding review (terutama review negatif) ke vector store.
-- [ ] Pilih embedding model (bisa pakai model multilingual kecil, atau embedding API).
-- [ ] Bangun LLM client wrapper (abstraksi provider: Anthropic/OpenAI/Ollama).
-- [ ] Buat prompt template untuk **insight generator**: input = kumpulan review ter-retrieve, output = ringkasan terstruktur (tema keluhan, contoh kutipan, saran tindak lanjut).
-- [ ] Buat prompt template untuk **chatbot internal**: input = pertanyaan bebas, output = jawaban grounded ke review ter-retrieve, termasuk fallback kalau tidak ada data relevan.
-- [ ] Uji manual kualitas output (cek hallucination, relevansi) dengan beberapa skenario pertanyaan nyata.
-- [ ] Tambahkan caching sederhana untuk hasil insight per filter/periode.
+- [x] Setup ChromaDB persistent (`src/rag/vector_store.py`), index 2664 review + metadata (`src/rag/build_index.py`).
+- [x] Embedding model multilingual ringan: `paraphrase-multilingual-MiniLM-L12-v2` (`src/rag/embeddings.py`).
+- [x] LLM client wrapper abstrak (`src/llm/base.py`) dengan provider **Groq**, **Gemini**, dan Ollama (factory via env `LLM_PROVIDER`).
+- [x] Prompt template insight generator (`src/llm/prompts/insight.txt`, output JSON terstruktur) + `InsightGenerator` (`src/rag/insight.py`).
+- [x] Prompt template chatbot (`src/llm/prompts/chat.txt`, anti-halusinasi) + `ChatResponder` (`src/rag/chat.py`).
+- [~] Uji manual kualitas output — retrieval tervalidasi (relevansi tinggi); uji LLM penuh menunggu API key Groq/Gemini diisi di `.env`.
+- [x] Caching insight (TTLCache, key=hash query) untuk kontrol biaya LLM.
 
 **Output Fase 3:** RAG pipeline + LLM insight generator + chatbot logic berfungsi end-to-end (masih lokal, belum diserving via API).
 

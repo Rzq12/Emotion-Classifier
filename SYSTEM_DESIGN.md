@@ -43,8 +43,8 @@ Mendesain sistem yang (a) ringan dijalankan di infra gratis/murah (HF Spaces CPU
                          ┌────────────────┐
                          │  LLM Client     │
                          │  Wrapper        │
-                         │ (Anthropic/     │
-                         │  OpenAI/Ollama) │
+                         │ (Groq/Gemini/   │
+                         │  Ollama)        │
                          └────────────────┘
 
    ── Offline / Training Pipeline (terpisah dari serving path) ──
@@ -78,7 +78,7 @@ Mendesain sistem yang (a) ringan dijalankan di infra gratis/murah (HF Spaces CPU
 
 ### 3.3 LLM Client Wrapper
 - Interface abstrak `LLMClient` dengan method seperti `generate(prompt, ...) -> str`.
-- Implementasi konkret: `AnthropicClient`, `OpenAIClient`, `OllamaClient` — dipilih via environment variable `LLM_PROVIDER`.
+- Implementasi konkret: `GroqClient`, `GeminiClient`, `OllamaClient` — dipilih via environment variable `LLM_PROVIDER`.
 - Wrapper menangani retry sederhana dan error handling seragam (timeout, rate limit dari provider) sehingga route handler API tidak perlu tahu detail provider.
 
 ### 3.4 Insight Generator (RAG Pipeline)
@@ -201,7 +201,7 @@ Jika nanti perlu scale up, jalur natural-nya: ChromaDB → managed vector DB, sy
 | Keputusan | Alasan |
 |---|---|
 | ChromaDB dibanding FAISS | Lebih mudah setup persistent + metadata filtering, cukup untuk skala data demo |
-| LLM client abstrak multi-provider | Development bisa pakai Ollama (gratis/lokal), demo publik pakai Anthropic/OpenAI (kualitas) tanpa ubah banyak kode |
+| LLM client abstrak multi-provider | Development bisa pakai Ollama (gratis/lokal), demo publik pakai Groq/Gemini (cepat + ada free tier) tanpa ubah banyak kode |
 | Training pipeline terpisah dari serving | Menjaga API ringan & cepat start; mengikuti praktik MLOps standar (offline training, online serving) |
 | Sinkron call untuk LLM (bukan async job queue) | Trafik demo rendah, kompleksitas job queue tidak sepadan manfaatnya di skala ini |
 | Caching insight per filter | Kontrol biaya API LLM saat demo publik diakses berulang dengan filter sama |

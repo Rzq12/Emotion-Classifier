@@ -118,3 +118,40 @@ adalah yang tersulit (F1 0.62) meski sudah `class_weight="balanced"`. Ini meneta
   dijalankan dengan mengubah `configs/training.yaml` — semua otomatis ter-log ke MLflow.
 - Pemilihan & registrasi model terbaik: `python -m src.tracking.registry --register`
   (memilih run dengan `test_f1_macro` tertinggi, tag `production-candidate`).
+
+---
+
+## Fase 3 — RAG & LLM Layer
+
+### Komponen
+
+- **Embedding:** `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+  (multilingual, CPU-friendly, mendukung Bahasa Indonesia), embedding ternormalisasi.
+- **Vector store:** ChromaDB persistent (`chroma_db/`), cosine space, 1 vektor per
+  review + metadata `{emotion, split}`. Total **2.664 review** ter-index.
+- **LLM provider:** wrapper abstrak `LLMClient` dengan implementasi **Groq**,
+  **Gemini** (google-genai), dan Ollama. Provider dipilih via `LLM_PROVIDER`;
+  error provider dinormalisasi ke `LLMError` agar handler API seragam.
+- **Insight generator:** retrieve review negatif (anger/sadness) → prompt JSON
+  terstruktur → parse defensif → cache TTL (kontrol biaya).
+- **Chatbot:** retrieve top-k by similarity → prompt anti-halusinasi → jawaban +
+  `sources` (review_id). Hits di bawah `min_score` dianggap tidak relevan →
+  balas eksplisit "tidak menemukan review relevan".
+
+### Validasi retrieval (tanpa LLM)
+
+Query "aplikasi error saat pembayaran" (filter anger/sadness) → top hit:
+- 0.806 sadness "error saat transaksi pembayaran"
+- 0.710 sadness "aplikasi sy mengalami error ... pembayaran"
+
+Query terbuka "dokternya ramah dan membantu" → top hit 0.953 happiness
+"dokter nya cekatan, sangat membantu". Relevansi retrieval baik.
+
+### Catatan
+
+- Dataset processed hanya punya `text,label`; metadata `date/app_source` (ada di
+  skema SYSTEM_DESIGN) tidak tersedia, jadi metadata vektor dibatasi ke
+  `emotion` + `split`. `review_id` di-generate `{split}_{index}`.
+- Generasi insight/chat penuh butuh API key (Groq/Gemini) di `.env` — belum
+  dijalankan live; logika diverifikasi via unit test (fake LLM/store).
+- Prompt disimpan sebagai file di `src/llm/prompts/` (bukan inline), sesuai CLAUDE.md.

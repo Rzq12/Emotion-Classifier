@@ -16,7 +16,7 @@ full ML lifecycle: data → training → experiment tracking → LLM layer → d
 | Fase 0 — Setup project | ✅ Selesai |
 | Fase 1 — Data & preprocessing | ✅ Selesai |
 | Fase 2 — Training & tracking | 🚧 Berjalan (baseline ✅, IndoBERT pipeline ✅) |
-| Fase 3 — RAG & LLM | ⏳ Belum |
+| Fase 3 — RAG & LLM | 🚧 Berjalan (retrieval ✅, insight/chat ✅ — perlu API key) |
 | Fase 4 — API & serving | ⏳ Belum |
 | Fase 5 — Deployment | ⏳ Belum |
 | Fase 6 — Monitoring & polish | ⏳ Belum |
@@ -93,6 +93,29 @@ mlflow ui --backend-store-uri sqlite:///mlflow.db
 |---|---|---|
 | Baseline (TF-IDF + LogReg) | 0.752 | 0.836 |
 | IndoBERT base | *(diisi setelah full training selesai)* | |
+
+## RAG & LLM (Fase 3)
+
+Embedding multilingual (`paraphrase-multilingual-MiniLM-L12-v2`) → ChromaDB
+persisten. Insight generator merangkum review beremosi negatif; chatbot menjawab
+pertanyaan dengan grounding ke review. LLM provider: **Groq** / **Gemini** / Ollama
+(pilih via `LLM_PROVIDER`).
+
+Isi API key di `.env` (lihat `.env.example`):
+
+```
+LLM_PROVIDER=groq
+GROQ_API_KEY=...      # https://console.groq.com/keys
+GEMINI_API_KEY=...    # https://aistudio.google.com/app/apikey
+```
+
+```bash
+# Bangun index vektor dari review processed (sekali jalan, offline)
+python -m src.rag.build_index --config configs/rag.yaml
+```
+
+Insight & chat dipakai lewat `InsightGenerator` / `ChatResponder` (di-wire ke API
+pada Fase 4). Retrieval berjalan tanpa API key; generasi insight/chat butuh key LLM.
 
 ## Testing & Linting
 
