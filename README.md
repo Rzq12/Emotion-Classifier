@@ -112,12 +112,38 @@ Endpoint:
 Docs interaktif tersedia di `/docs`. CORS dan rate limit dikonfigurasi via env
 (`CORS_ALLOW_ORIGINS`, `RATE_LIMIT_PER_MINUTE`). Build image: `docker build -t indo-review-api .`
 
+## Frontend (web/)
+
+Aplikasi React + Vite dengan 4 tab: Dashboard (distribusi emosi), Coba Klasifikasi,
+Insight, dan Tanya Data (chat).
+
+```bash
+cd web
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # output ke web/dist
+```
+
+Set `VITE_API_BASE_URL` (lihat `web/.env.example`) ke URL backend.
+
 ## Testing & Linting
 
 ```bash
 pytest -q
 ruff check src tests
+cd web && npm run build
 ```
+
+## Deployment
+
+- **API → Hugging Face Spaces (Docker SDK):** gunakan `Dockerfile` di root. Set
+  Space ke SDK Docker, `app_port: 7860`, dan isi secret (`GROQ_API_KEY` /
+  `GEMINI_API_KEY`, `CORS_ALLOW_ORIGINS`). Model IndoBERT & `chroma_db/` di-pull
+  dari HF Hub atau di-mount saat startup (tidak di-bake ke image).
+- **Web → Vercel:** root project `web/` (`web/vercel.json` sudah disiapkan). Set
+  env `VITE_API_BASE_URL` ke URL Space.
+- **CI:** `.github/workflows/ci.yml` menjalankan lint + test backend dan build
+  frontend di setiap push/PR.
 
 ## Dataset
 

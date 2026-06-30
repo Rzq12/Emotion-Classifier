@@ -65,3 +65,12 @@ class HealthResponse(BaseModel):
     vector_db_connected: bool
     llm_provider: str
     llm_available: bool
+
+
+# --- /stats ---------------------------------------------------------------
+
+class StatsResponse(BaseModel):
+    total: int
+    by_emotion: dict[str, int]
+    by_split: dict[str, dict[str, int]]
+    negative_ratio: float
