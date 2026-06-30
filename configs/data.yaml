@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------------------
+# Konfigurasi pipeline data (Fase 1). Reproducible: jangan hardcode di script.
+# ---------------------------------------------------------------------------
+
+# Sumber data mentah. Saat ini berada di folder `Dataset/` (akan dipindah ke
+# data/raw + DVC pada langkah versioning).
+raw:
+  train_csv: "Dataset/train paling fix.csv"
+  test_csv: "Dataset/23-24test_emotion_data tanpa netral kurang 500.csv"
+  text_column: "review_text"
+  label_column: "majority_vote"
+
+# Output dataset bersih & ter-split.
+processed:
+  dir: "data/processed"
+  train_csv: "data/processed/train.csv"
+  val_csv: "data/processed/val.csv"
+  test_csv: "data/processed/test.csv"
+
+# Skema label final: emotion 3-kelas (tanpa netral), sesuai dataset nyata.
+labels:
+  - anger
+  - happiness
+  - sadness
+
+# Parameter cleaning.
+preprocessing:
+  lowercase: true
+  remove_urls: true
+  remove_mentions: true
+  reduce_repeated_chars: true   # "baguuusss" -> "baguus" (maks 2)
+  normalize_slang: true
+  emoji_strategy: "remove"      # remove | demojize | keep
+  min_chars: 3                  # buang teks terlalu pendek/non-informatif setelah cleaning
+
+# Split train -> train/val (test sudah terpisah dari sumber).
+split:
+  val_size: 0.15
+  random_state: 42
+  stratify: true

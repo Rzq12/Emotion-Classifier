@@ -1,0 +1,23 @@
+[project]
+name = "indo-review-intelligence"
+version = "0.1.0"
+description = "Hybrid emotion classifier (IndoBERT) + RAG/LLM insight generator for Indonesian app reviews."
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra -q"
