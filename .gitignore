@@ -68,6 +68,8 @@ data/processed/
 *.safetensors
 mlruns/
 mlartifacts/
+artifacts/
+mlflow.db
 .dvc/cache/
 chroma_db/
 *.sqlite3

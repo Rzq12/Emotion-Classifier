@@ -15,7 +15,7 @@ full ML lifecycle: data → training → experiment tracking → LLM layer → d
 |---|---|
 | Fase 0 — Setup project | ✅ Selesai |
 | Fase 1 — Data & preprocessing | ✅ Selesai |
-| Fase 2 — Training & tracking | ⏳ Belum |
+| Fase 2 — Training & tracking | 🚧 Berjalan (baseline ✅, IndoBERT pipeline ✅) |
 | Fase 3 — RAG & LLM | ⏳ Belum |
 | Fase 4 — API & serving | ⏳ Belum |
 | Fase 5 — Deployment | ⏳ Belum |
@@ -69,6 +69,30 @@ python -m src.data.prepare_dataset --config configs/data.yaml
 ```
 
 Output ditulis ke `data/processed/{train,val,test}.csv` dengan kolom `text,label`.
+
+## Training & Tracking (Fase 2)
+
+Tracking pakai MLflow backend SQLite (`sqlite:///mlflow.db`). Metrik utama: **F1-macro**.
+
+```bash
+# Baseline TF-IDF + Logistic Regression
+python -m src.training.baseline --config configs/training.yaml
+
+# Fine-tuning IndoBERT (CPU: lama; smoke test pakai --max-train-samples)
+python -m src.training.train_indobert --config configs/training.yaml
+python -m src.training.train_indobert --config configs/training.yaml --max-train-samples 64 --epochs 1
+
+# Bandingkan run & registrasi model terbaik (production candidate)
+python -m src.tracking.registry --register
+
+# Lihat dashboard MLflow
+mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
+
+| Model | test F1-macro | test acc |
+|---|---|---|
+| Baseline (TF-IDF + LogReg) | 0.752 | 0.836 |
+| IndoBERT base | *(diisi setelah full training selesai)* | |
 
 ## Testing & Linting
 

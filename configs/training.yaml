@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------------------
+# Konfigurasi training (Fase 2). Reproducible: semua hyperparameter di sini.
+# ---------------------------------------------------------------------------
+
+data:
+  train_csv: "data/processed/train.csv"
+  val_csv: "data/processed/val.csv"
+  test_csv: "data/processed/test.csv"
+
+mlflow:
+  experiment: "indo-review-emotion"
+
+# --- Baseline: TF-IDF + Logistic Regression ---
+baseline:
+  ngram_range: [1, 2]
+  min_df: 2
+  max_features: 20000
+  C: 1.0
+  max_iter: 1000
+  class_weight_balanced: true   # handle imbalance (anger minoritas)
+
+# --- IndoBERT fine-tuning ---
+indobert:
+  model_name: "indobenchmark/indobert-base-p1"
+  max_length: 128
+  num_epochs: 3
+  batch_size: 16
+  eval_batch_size: 32
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  class_weighting: true         # weighted cross-entropy untuk imbalance
+  seed: 42
+  output_dir: "artifacts/indobert"
+  run_name: "indobert-base-finetune"
+  # Subset kecil untuk smoke test pipeline (null = pakai seluruh data).
+  max_train_samples: null
