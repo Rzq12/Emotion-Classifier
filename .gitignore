@@ -1,12 +1,10 @@
 # ---------------------------------------------------------------------------
-# Internal planning & agent docs (tidak ikut di-track, sesuai ketentuan proyek)
+# Dokumen markdown internal (planning/agent docs) — hanya README utama di-track.
 # ---------------------------------------------------------------------------
-CLAUDE.md
-UIUX_FLOW.md
-UIUXFLOW.md
-TASK_BREAKDOWN.md
-TASKBREAKDOWN.md
+*.md
+!README.md
 .agents/
+skills-lock.json
 
 # ---------------------------------------------------------------------------
 # Secrets & environment

@@ -1,98 +1,98 @@
 # Indo Review Intelligence
 
-Sistem hybrid yang menggabungkan **emotion classifier** (fine-tuned IndoBERT) dengan
-**RAG + LLM** untuk menghasilkan insight otomatis dari review aplikasi Indonesia
-(domain: Halodoc, Gojek, dsb). Proyek portofolio AI/ML Engineer yang menunjukkan
-full ML lifecycle: data → training → experiment tracking → LLM layer → deployment → monitoring.
+Sistem hybrid yang menggabungkan **emotion classifier** (fine-tuned IndoBERT)
+dengan **RAG + LLM** untuk menghasilkan insight otomatis dari review aplikasi
+Indonesia (domain: Halodoc, Gojek, dsb).
 
-> **Catatan skema:** tugas klasifikasi utama adalah **emotion 3-kelas**
-> (`anger`, `happiness`, `sadness`) — **tanpa kelas netral** — mengikuti dataset
-> nyata yang tersedia. Lihat `EXPERIMENTS.md` untuk alasan keputusan ini.
+Klasifikasi emotion 3-kelas — `anger`, `happiness`, `sadness` (tanpa kelas netral) —
+dipadukan dengan retrieval-augmented generation untuk merangkum keluhan pengguna
+dan menjawab pertanyaan tim produk berbasis data review nyata.
 
-## Status
+## Fitur
 
-| Fase | Status |
+- **Classifier:** klasifikasi emosi review (IndoBERT fine-tuned) dengan baseline
+  TF-IDF + Logistic Regression sebagai pembanding.
+- **Insight generator:** ringkasan terstruktur (tema keluhan, kutipan, rekomendasi)
+  dari review beremosi negatif, di-grounding ke data dan di-cache.
+- **Chatbot internal:** menjawab pertanyaan bebas dengan grounding ke review
+  ter-retrieve (anti-halusinasi) dan menyertakan sumber.
+- **Experiment tracking:** MLflow (metrik utama F1-macro, confusion matrix, registry).
+- **LLM provider-agnostic:** Groq / Gemini / Ollama lewat satu interface.
+
+## Tech Stack
+
+| Layer | Tools |
 |---|---|
-| Fase 0 — Setup project | ✅ Selesai |
-| Fase 1 — Data & preprocessing | ✅ Selesai |
-| Fase 2 — Training & tracking | 🚧 Berjalan (baseline ✅, IndoBERT pipeline ✅) |
-| Fase 3 — RAG & LLM | ⏳ Belum |
-| Fase 4 — API & serving | ⏳ Belum |
-| Fase 5 — Deployment | ⏳ Belum |
-| Fase 6 — Monitoring & polish | ⏳ Belum |
-
-Roadmap detail: `PLAN.md`. Breakdown task: `TASK_BREAKDOWN.md`.
+| Preprocessing | pandas, scikit-learn |
+| Model | HuggingFace Transformers (IndoBERT), PyTorch |
+| Tracking | MLflow (SQLite backend) |
+| Vector store | ChromaDB |
+| Embedding | sentence-transformers (multilingual MiniLM) |
+| LLM | Groq / Gemini / Ollama |
+| API | FastAPI (Fase 4) |
+| Frontend | React + Vite (Fase 5) |
 
 ## Struktur Repo
 
 ```
 .
-├── configs/            # konfigurasi pipeline (data.yaml, dst.)
-├── data/
-│   ├── raw/            # data mentah (DVC-tracked, tidak di git)
-│   └── processed/      # output pipeline (train/val/test.csv)
-├── Dataset/            # sumber data emotion asli (CSV)
+├── configs/            # konfigurasi pipeline (data.yaml, training.yaml, rag.yaml)
+├── data/processed/     # output pipeline data (train/val/test.csv)
+├── Dataset/            # sumber data emotion (CSV)
 ├── src/
 │   ├── data/           # cleaning, normalisasi label, build dataset
-│   ├── training/       # (Fase 2) baseline & fine-tuning
-│   ├── tracking/       # (Fase 2) helper MLflow
-│   ├── rag/            # (Fase 3) embedding & vector store
-│   ├── llm/            # (Fase 3) LLM client & prompt
-│   ├── api/            # (Fase 4) FastAPI app
-│   └── monitoring/     # (Fase 6) logging & drift
+│   ├── training/       # baseline & fine-tuning IndoBERT, metrik
+│   ├── tracking/       # helper MLflow + model registry
+│   ├── rag/            # embedding, vector store, insight & chat
+│   ├── llm/            # LLM client (Groq/Gemini/Ollama) + prompt
+│   ├── api/            # FastAPI app (Fase 4)
+│   └── monitoring/     # logging & drift (Fase 6)
 ├── tests/              # unit test
-└── web/                # (Fase 5) frontend React
+└── web/                # frontend React (Fase 5)
 ```
 
 ## Setup
 
-Proyek menggunakan conda environment `trading` (Python 3.11).
+Proyek menggunakan Python 3.11 (contoh: conda env `trading`).
 
 ```bash
-conda activate trading
 pip install -r requirements.txt
+cp .env.example .env          # isi API key LLM (Groq/Gemini)
+cp web/.env.example web/.env
 ```
 
-Salin environment example:
+## Penggunaan
 
-```bash
-cp .env.example .env          # backend (LLM, vector store, API)
-cp web/.env.example web/.env  # frontend
-```
-
-## Menjalankan Pipeline Data (Fase 1)
-
-Membersihkan teks, menyatukan label, dedup, dan split train/val (test sudah terpisah):
+### 1. Pipeline data
 
 ```bash
 python -m src.data.prepare_dataset --config configs/data.yaml
 ```
 
-Output ditulis ke `data/processed/{train,val,test}.csv` dengan kolom `text,label`.
+Membersihkan teks (normalisasi slang Indo, emoji), menyatukan label, dedup, dan
+split train/val. Output: `data/processed/{train,val,test}.csv` (kolom `text,label`).
 
-## Training & Tracking (Fase 2)
-
-Tracking pakai MLflow backend SQLite (`sqlite:///mlflow.db`). Metrik utama: **F1-macro**.
+### 2. Training & tracking
 
 ```bash
-# Baseline TF-IDF + Logistic Regression
-python -m src.training.baseline --config configs/training.yaml
-
-# Fine-tuning IndoBERT (CPU: lama; smoke test pakai --max-train-samples)
-python -m src.training.train_indobert --config configs/training.yaml
-python -m src.training.train_indobert --config configs/training.yaml --max-train-samples 64 --epochs 1
-
-# Bandingkan run & registrasi model terbaik (production candidate)
-python -m src.tracking.registry --register
-
-# Lihat dashboard MLflow
-mlflow ui --backend-store-uri sqlite:///mlflow.db
+python -m src.training.baseline --config configs/training.yaml        # TF-IDF + LogReg
+python -m src.training.train_indobert --config configs/training.yaml  # IndoBERT
+python -m src.tracking.registry --register                            # daftarkan model terbaik
+mlflow ui --backend-store-uri sqlite:///mlflow.db                     # dashboard eksperimen
 ```
 
-| Model | test F1-macro | test acc |
-|---|---|---|
-| Baseline (TF-IDF + LogReg) | 0.752 | 0.836 |
-| IndoBERT base | *(diisi setelah full training selesai)* | |
+Metrik utama F1-macro (dataset imbalanced). Tambahkan `--max-train-samples`/`--epochs`
+untuk smoke test cepat.
+
+### 3. RAG (insight & chat)
+
+```bash
+python -m src.rag.build_index --config configs/rag.yaml   # embed review ke ChromaDB
+```
+
+Insight & chatbot diakses lewat `InsightGenerator` / `ChatResponder`
+(`src/rag/`). Pilih provider LLM via `LLM_PROVIDER` di `.env`. Retrieval berjalan
+tanpa API key; generasi insight/chat memerlukan key LLM.
 
 ## Testing & Linting
 
@@ -103,11 +103,6 @@ ruff check src tests
 
 ## Dataset
 
-| Split | Jumlah | Distribusi |
-|---|---|---|
-| train | 1.798 | happiness 1132 / sadness 485 / anger 181 |
-| val   | 318   | happiness 200 / sadness 86 / anger 32 |
-| test  | 548   | happiness 321 / sadness 126 / anger 101 |
-
-Dataset sangat imbalanced (kelas `anger` minoritas) — strategi penanganannya
-dibahas di Fase 2 (`PLAN.md`) dan dicatat di `EXPERIMENTS.md`.
+Emotion classification 3-kelas (`anger`, `happiness`, `sadness`) dari review
+aplikasi Indonesia. Dataset imbalanced (kelas `anger` minoritas); penanganannya
+memakai class weighting dan evaluasi berbasis F1-macro.
