@@ -1,9 +1,14 @@
 # PRD — Indo Review Intelligence
 **Hybrid Classifier + RAG Insight Generator**
 
-Versi: 1.0
+Versi: 1.1
 Status: Draft
 Pemilik: (isi nama kamu)
+
+> **Update v1.1 (reframe):** Tugas klasifikasi utama diubah dari *sentiment*
+> (positive/negative/neutral) menjadi **emotion 3-kelas** (`anger`/`happiness`/`sadness`),
+> **tanpa kelas netral**, mengikuti dataset nyata yang tersedia. Lihat `EXPERIMENTS.md`.
+> Referensi "sentiment" pada dokumen lama dibaca sebagai "emotion" kecuali disebut lain.
 
 ---
 
@@ -52,7 +57,7 @@ Proyek ini membangun sistem end-to-end yang menggabungkan **klasifikasi ML klasi
 ### 6.1 Data & Training (Must Have)
 - Dataset review (Halodoc existing + opsional scrape Gojek/Tokopedia untuk variasi) dengan label sentiment dan/atau emotion.
 - Preprocessing pipeline (cleaning, normalisasi teks Indo, handling emoji/slang).
-- Fine-tuning IndoBERT untuk klasifikasi sentiment (positive/negative/neutral) dan opsional emotion (marah, sedih, senang, dll).
+- Fine-tuning IndoBERT untuk klasifikasi **emotion 3-kelas** (`anger`/`happiness`/`sadness`, tanpa netral) sesuai dataset nyata.
 - Dataset versioning dengan DVC, remote storage via DagsHub.
 
 ### 6.2 Experiment Tracking (Must Have)

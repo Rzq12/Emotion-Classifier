@@ -32,7 +32,7 @@ Sistem terdiri dari: pipeline data & training (offline), API backend (FastAPI di
 
 | ID | Requirement | Acceptance Criteria |
 |---|---|---|
-| FR-1.1 | Sistem dapat menerima satu teks review dan mengembalikan label sentiment | Output berupa label (`positive`/`negative`/`neutral`) + confidence score (0-1) dalam < 1 detik |
+| FR-1.1 | Sistem dapat menerima satu teks review dan mengembalikan label emotion | Output berupa label (`anger`/`happiness`/`sadness`) + confidence score (0-1) dalam < 1 detik |
 | FR-1.2 | Sistem dapat memproses input batch (opsional, stretch) | Menerima list teks, mengembalikan list hasil dengan urutan sama |
 | FR-1.3 | Model classifier harus dapat di-reproduce dari eksperimen tertentu | Setiap model production candidate punya run_id MLflow yang dapat ditelusuri |
 
