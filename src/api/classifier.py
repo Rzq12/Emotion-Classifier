@@ -31,8 +31,14 @@ class EmotionClassifier:
         return self._model is not None
 
     def available(self) -> bool:
-        """True if the model files exist on disk (without loading them)."""
-        return (Path(self.model_dir) / "config.json").exists()
+        """True if the model is loadable.
+
+        Either a local directory with ``config.json`` exists, or ``model_dir`` is
+        a Hugging Face Hub repo id (``org/name``) that transformers can download.
+        """
+        local = (Path(self.model_dir) / "config.json").exists()
+        looks_like_repo_id = "/" in self.model_dir and not Path(self.model_dir).exists()
+        return local or looks_like_repo_id
 
     def _load(self) -> None:
         if self._model is not None:

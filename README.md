@@ -119,6 +119,49 @@ pytest -q
 ruff check src tests
 ```
 
+<<<<<<< Updated upstream
+=======
+## Deployment
+
+Arsitektur: **API** di Hugging Face Spaces (Docker), **web** di Vercel. Model
+classifier di-pull dari HF Hub; index ChromaDB di-bake ke image saat build dari
+`Dataset/` (cold start cepat).
+
+### 1. Publikasikan model ke HF Hub
+
+```bash
+huggingface-cli login
+python -m scripts.push_model_to_hub --repo <username>/indo-emotion-indobert
+```
+
+### 2. API → Hugging Face Spaces (Docker SDK)
+
+1. Buat Space baru → SDK **Docker**.
+2. Push isi repo ini ke Space (atau hubungkan dari GitHub). `Dockerfile` di root
+   otomatis dipakai; index ChromaDB dibuild saat image build.
+3. Tambahkan frontmatter di README Space (atau set di UI): `app_port: 7860`.
+4. Isi **Settings → Variables & secrets**:
+   - `MODEL_DIR` = `<username>/indo-emotion-indobert`
+   - `LLM_PROVIDER` = `groq` (atau `gemini`)
+   - `GROQ_API_KEY` / `GEMINI_API_KEY`
+   - `CORS_ALLOW_ORIGINS` = URL Vercel (mis. `https://namaapp.vercel.app`)
+5. Tunggu build selesai, verifikasi `https://<space>.hf.space/health`.
+
+### 3. Web → Vercel
+
+1. Import repo, set **Root Directory** = `web/` (`web/vercel.json` sudah ada).
+2. Env var: `VITE_API_BASE_URL` = URL Space (mis. `https://<space>.hf.space`).
+3. Deploy, lalu smoke test: Dashboard → Classify → Insight → Chat.
+
+### 4. CI
+
+`.github/workflows/ci.yml` menjalankan lint + test backend dan build frontend
+di setiap push/PR. Untuk auto-deploy ke Space, tambahkan remote git Space +
+`HF_TOKEN` secret di GitHub (opsional).
+
+> Uji lokal image: `docker build -t indo-review-api . && docker run -p 7860:7860 -e MODEL_DIR=<username>/indo-emotion-indobert -e GROQ_API_KEY=... indo-review-api`
+
+>>>>>>> Stashed changes
 ## Dataset
 
 Emotion classification 3-kelas (`anger`, `happiness`, `sadness`) dari review

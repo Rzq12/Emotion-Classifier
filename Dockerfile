@@ -27,11 +27,18 @@ RUN pip install --upgrade pip \
 # Kode aplikasi & konfigurasi.
 COPY src ./src
 COPY configs ./configs
+COPY Dataset ./Dataset
 
-# Artifact model & vector store di-mount/di-pull saat runtime (bukan di-bake ke
-# image, sesuai kebijakan: model besar lewat HF Hub / volume).
-#   - MODEL_DIR  -> direktori model IndoBERT (default artifacts/indobert)
-#   - chroma_db/ -> hasil `python -m src.rag.build_index`
+# Bake dataset processed + index vektor (ChromaDB) ke image saat build agar
+# cold start cepat. Embedding model ikut ter-cache di layer ini.
+RUN python -m src.data.prepare_dataset --config configs/data.yaml \
+    && python -m src.rag.build_index --config configs/rag.yaml
+
+# Model classifier: di-set lewat env MODEL_DIR.
+#   - HF Hub repo id (mis. "username/indo-emotion-indobert") -> di-download saat
+#     request pertama dan di-cache; ATAU
+#   - path lokal jika model di-mount/di-commit ke repo Space.
+ENV MODEL_DIR=artifacts/indobert
 
 RUN chown -R appuser:appuser /app
 USER appuser
