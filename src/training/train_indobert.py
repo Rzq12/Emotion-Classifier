@@ -167,7 +167,7 @@ def run(config_path: str, overrides: dict | None = None) -> dict[str, float]:
         trainer.train()
 
         val_metrics = trainer.evaluate(val_ds, metric_key_prefix="val")
-        mlflow.log_metrics({k: v for k, v in val_metrics.items() if isinstance(v, (int, float))})
+        mlflow.log_metrics({k: v for k, v in val_metrics.items() if isinstance(v, int | float)})
 
         test_pred = np.argmax(trainer.predict(test_ds).predictions, axis=-1)
         test_metrics = compute_metrics(data.test.labels, test_pred)
