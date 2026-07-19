@@ -1,3 +1,13 @@
+---
+title: Indo Review Intelligence
+emoji: 🇮🇩
+colorFrom: green
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Indo Review Intelligence
 
 Sistem hybrid yang menggabungkan **emotion classifier** (fine-tuned IndoBERT)
@@ -185,11 +195,29 @@ python -m scripts.push_model_to_hub --repo <username>/indo-emotion-indobert
 2. Env var: `VITE_API_BASE_URL` = URL Space (mis. `https://<space>.hf.space`).
 3. Deploy, lalu smoke test: Dashboard → Classify → Insight → Chat.
 
-### 4. CI
+### 4. CI & otomasi HF Spaces
 
-`.github/workflows/ci.yml` menjalankan lint + test backend dan build frontend
-di setiap push/PR. Untuk auto-deploy ke Space, tambahkan remote git Space +
-`HF_TOKEN` secret di GitHub (opsional).
+- `.github/workflows/ci.yml` — lint + test backend dan build frontend di setiap
+  push/PR ke `main`.
+- `.github/workflows/sync-to-hf.yml` — auto force-push `main` ke repo Space
+  setiap push ke `main` (bisa juga manual via Actions tab).
+- `.github/workflows/keep-alive.yml` — ping Space tiap 6 jam agar tidak sleep
+  (free tier HF Spaces tidur setelah ~48 jam tanpa traffic).
+
+Secret yang harus di-set di GitHub (**Settings → Secrets and variables →
+Actions**):
+
+| Secret | Isi |
+|---|---|
+| `HF_TOKEN` | Token HF dengan akses write (https://huggingface.co/settings/tokens) |
+| `HF_SPACE_REPO` | Repo Space, mis. `riezqidr/indo-review-intelligence` |
+| `HF_SPACE_URL` | URL health Space, mis. `https://riezqidr-indo-review-intelligence.hf.space/health` |
+
+> Catatan: workflow `schedule` (keep-alive) hanya berjalan dari branch default
+> (`main`) — pastikan workflow sudah ter-merge ke `main` di GitHub.
+
+Frontmatter HF Spaces (`sdk: docker`, `app_port: 7860`) sudah ada di bagian atas
+README ini, jadi Space langsung terkonfigurasi saat sync.
 
 > Uji lokal image: `docker build -t indo-review-api . && docker run -p 7860:7860 -e MODEL_DIR=<username>/indo-emotion-indobert -e GROQ_API_KEY=... indo-review-api`
 
