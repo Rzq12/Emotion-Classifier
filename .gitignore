@@ -1,12 +1,12 @@
 # ---------------------------------------------------------------------------
-# Internal planning & agent docs (tidak ikut di-track, sesuai ketentuan proyek)
+# Dokumen markdown internal (planning/agent docs) — hanya README utama di-track.
 # ---------------------------------------------------------------------------
-CLAUDE.md
-UIUX_FLOW.md
-UIUXFLOW.md
-TASK_BREAKDOWN.md
-TASKBREAKDOWN.md
+*.md
+!README.md
+!reports/*.md
 .agents/
+skills-lock.json
+
 
 # ---------------------------------------------------------------------------
 # Secrets & environment
@@ -68,10 +68,13 @@ data/processed/
 *.safetensors
 mlruns/
 mlartifacts/
+artifacts/
+mlflow.db
 .dvc/cache/
 chroma_db/
 *.sqlite3
 prediction_logs*.jsonl
+data/monitoring/
 
 # Notebooks checkpoints
 .ipynb_checkpoints/

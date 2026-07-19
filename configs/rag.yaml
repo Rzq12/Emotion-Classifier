@@ -1,0 +1,29 @@
+# ---------------------------------------------------------------------------
+# Konfigurasi RAG layer (Fase 3).
+# ---------------------------------------------------------------------------
+
+embedding:
+  # Multilingual, ringan, CPU-friendly (mendukung Bahasa Indonesia).
+  model_name: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  batch_size: 64
+
+vector_store:
+  persist_dir: "chroma_db"
+  collection_name: "reviews"
+
+data:
+  # Sumber review untuk di-index (hasil pipeline Fase 1).
+  csvs:
+    - "data/processed/train.csv"
+    - "data/processed/val.csv"
+    - "data/processed/test.csv"
+
+insight:
+  # Emosi negatif yang jadi fokus insight keluhan.
+  negative_emotions: ["anger", "sadness"]
+  top_k: 20
+  cache_ttl_seconds: 3600
+  cache_max_size: 128
+
+chat:
+  top_k: 8

@@ -1,0 +1,22 @@
+Anda adalah analis produk yang merangkum keluhan pengguna dari review aplikasi Indonesia.
+
+Tugas: dari kumpulan review beremosi negatif (marah/sedih) berikut, susun insight ringkas dan dapat ditindaklanjuti untuk tim produk. JANGAN mengarang; setiap tema harus didasarkan pada review yang diberikan.
+
+Review (format: [id] (emosi) teks):
+{reviews}
+
+Jawab HANYA dalam format JSON valid (tanpa teks lain, tanpa markdown fence) dengan skema:
+{{
+  "summary": "ringkasan naratif 1-2 kalimat tema keluhan dominan",
+  "themes": [
+    {{"theme": "nama tema singkat", "count": <perkiraan jumlah review terkait>, "example_review_ids": ["id1", "id2"]}}
+  ],
+  "sample_quotes": ["kutipan singkat dari review (anonim, apa adanya)"],
+  "recommendations": ["saran tindak lanjut konkret untuk tim produk"]
+}}
+
+Aturan:
+- Gunakan Bahasa Indonesia.
+- Maksimal 5 tema, urut dari paling sering.
+- example_review_ids harus benar-benar berasal dari daftar di atas.
+- Jika data terlalu sedikit untuk insight bermakna, kembalikan summary yang menyatakan hal tersebut dan themes kosong.
