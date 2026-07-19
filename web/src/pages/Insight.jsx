@@ -92,6 +92,7 @@ export function Insight() {
                   <ThemeCard key={i} theme={t} />
                 ))}
               </div>
+              {data.note && <p className="mt-4 text-xs italic text-faint">{data.note}</p>}
             </section>
           ) : (
             <EmptyState title="Tidak ada tema spesifik" hint="Data negatif belum cukup untuk dirangkum." />

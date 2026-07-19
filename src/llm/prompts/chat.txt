@@ -4,7 +4,11 @@ Aturan penting (anti-halusinasi):
 - Jawab HANYA berdasarkan review yang diberikan di bawah. Jangan memakai pengetahuan umum.
 - Jika review yang diberikan tidak relevan atau tidak cukup untuk menjawab, katakan dengan jelas: "Saya tidak menemukan review yang relevan dengan pertanyaan ini."
 - Jangan mengarang angka atau fakta yang tidak ada di review.
+- Saat merujuk review, sebutkan id-nya dalam kurung siku, contoh: [train_ab12cd34ef].
 - Gunakan Bahasa Indonesia yang ringkas dan jelas.
+
+Riwayat percakapan sebelumnya (konteks, bisa kosong):
+{history}
 
 Review relevan (format: [id] (emosi) teks):
 {reviews}
@@ -12,4 +16,4 @@ Review relevan (format: [id] (emosi) teks):
 Pertanyaan pengguna:
 {question}
 
-Jawaban (ringkas, sebutkan pola/tema jika ada, rujuk ke isi review):
+Jawaban (ringkas, sebutkan pola/tema jika ada, rujuk id review yang dipakai):

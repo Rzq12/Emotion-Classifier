@@ -11,9 +11,12 @@ from src.api.config import get_settings
 from src.llm.base import LLMClient
 from src.llm.factory import get_llm_client
 from src.monitoring.prediction_log import PredictionLogger
+from src.rag.bm25 import BM25Index
 from src.rag.chat import ChatConfig, ChatResponder
+from src.rag.corpus import load_reviews
 from src.rag.embeddings import Embedder
 from src.rag.insight import InsightConfig, InsightGenerator
+from src.rag.retriever import HybridRetriever
 from src.rag.vector_store import ReviewVectorStore
 
 
@@ -51,6 +54,23 @@ def get_llm() -> LLMClient:
 
 
 @lru_cache
+def get_bm25() -> BM25Index:
+    reviews = load_reviews(_rag_cfg()["data"]["csvs"])
+    index = BM25Index()
+    index.fit(
+        ids=reviews["review_id"].tolist(),
+        texts=reviews["text"].tolist(),
+        emotions=reviews["label"].tolist(),
+    )
+    return index
+
+
+@lru_cache
+def get_retriever() -> HybridRetriever:
+    return HybridRetriever(get_vector_store(), get_embedder(), get_bm25())
+
+
+@lru_cache
 def get_insight_generator() -> InsightGenerator:
     ic = _rag_cfg()["insight"]
     config = InsightConfig(
@@ -59,10 +79,17 @@ def get_insight_generator() -> InsightGenerator:
         cache_ttl_seconds=ic["cache_ttl_seconds"],
         cache_max_size=ic["cache_max_size"],
     )
-    return InsightGenerator(get_vector_store(), get_embedder(), get_llm(), config)
+    return InsightGenerator(get_retriever(), get_llm(), config)
 
 
 @lru_cache
 def get_chat_responder() -> ChatResponder:
     cc = _rag_cfg()["chat"]
-    return ChatResponder(get_vector_store(), get_embedder(), get_llm(), ChatConfig(top_k=cc["top_k"]))
+    config = ChatConfig(
+        top_k=cc["top_k"],
+        min_score=cc.get("min_score", 0.35),
+        min_bm25=cc.get("min_bm25", 1.0),
+        cache_ttl_seconds=cc.get("cache_ttl_seconds", 1800),
+        cache_max_size=cc.get("cache_max_size", 256),
+    )
+    return ChatResponder(get_retriever(), get_llm(), config)

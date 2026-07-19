@@ -3,10 +3,12 @@
 
 FROM python:3.11-slim
 
-# CPU-only torch + lib dasar.
+# CPU-only torch + lib dasar. HF_HOME di dalam /app supaya cache model yang
+# terunduh saat build (root) tetap terbaca-tulis oleh appuser saat runtime —
+# di luar itu, download model dari HF Hub saat runtime gagal permission.
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    HF_HOME=/home/appuser/.cache/huggingface \
+    HF_HOME=/app/.cache/huggingface \
     PORT=7860
 
 # Dependency sistem minimal (build wheels tertentu).

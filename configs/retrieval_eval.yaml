@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# Golden set kecil untuk evaluasi retrieval (src/rag/evaluate_retrieval.py).
+#
+# Definisi relevan: dokumen ter-retrieve mengandung salah satu expected_terms
+# (substring match pada teks yang sudah dibersihkan). Query sengaja memakai
+# slang/typo khas user untuk menguji normalisasi query.
+# ---------------------------------------------------------------------------
+
+top_k: 10
+
+cases:
+  - query: "knp ga bisa bayar pake dana"
+    expected_terms: ["dana", "bayar", "pembayaran"]
+  - query: "aplikasi error pas transaksi"
+    expected_terms: ["error", "transaksi"]
+  - query: "dokternya gimana, ramah ga?"
+    expected_terms: ["dokter"]
+  - query: "pengiriman obat lama banget"
+    expected_terms: ["obat"]
+  - query: "cs nya lambat merespon keluhan"
+    expected_terms: ["customer", "cs", "respon"]
+  - query: "aplikasi lemot pas dibuka"
+    expected_terms: ["lambat", "lemot", "loading", "lama"]
+  - query: "voucher ga bisa dipake"
+    expected_terms: ["voucher", "promo", "kode"]
+  - query: "saldo ga balik padahal transaksi gagal"
+    expected_terms: ["saldo", "refund", "kembali"]
+  - query: "konsultasi sama dokter memuaskan ga?"
+    expected_terms: ["konsultasi", "dokter"]
+  - query: "resep obat ga bisa ditebus"
+    expected_terms: ["resep", "obat"]
+
+# Query di luar domain review aplikasi — dipakai untuk kalibrasi ambang
+# relevansi (min_score): skor top-1 query ini seharusnya di bawah ambang.
+irrelevant_probes:
+  - "resep masakan rendang enak"
+  - "jadwal pertandingan bola nanti malam"
+  - "harga saham hari ini naik atau turun"
