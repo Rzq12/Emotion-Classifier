@@ -110,3 +110,13 @@ def test_chat_ok(client):
 def test_chat_empty_question_422(client):
     r = client.post("/chat", json={"question": ""})
     assert r.status_code == 422
+
+
+def test_stats_ok(client):
+    r = client.get("/stats")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] > 0
+    assert set(body["by_emotion"].keys()) == {"anger", "happiness", "sadness"}
+    assert set(body["by_split"].keys()) == {"train", "val", "test"}
+    assert 0.0 <= body["negative_ratio"] <= 1.0

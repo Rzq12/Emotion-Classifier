@@ -78,6 +78,13 @@ def health(classifier: ClassifierDep, store: StoreDep, llm: LLMDep) -> schemas.H
     )
 
 
+@app.get("/stats", response_model=schemas.StatsResponse)
+def stats() -> schemas.StatsResponse:
+    from src.api.stats import compute_stats
+
+    return schemas.StatsResponse(**compute_stats())
+
+
 @app.post("/classify", response_model=schemas.ClassifyResponse)
 def classify(body: schemas.ClassifyRequest, classifier: ClassifierDep) -> schemas.ClassifyResponse:
     try:

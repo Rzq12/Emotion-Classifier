@@ -105,6 +105,7 @@ Endpoint:
 | Method | Path | Fungsi |
 |---|---|---|
 | GET | `/health` | Status model, vector DB, LLM provider |
+| GET | `/stats` | Statistik dataset (distribusi emosi, per-split) untuk dashboard |
 | POST | `/classify` | `{text}` → `{label, confidence}` |
 | POST | `/insight` | `{query}` → ringkasan terstruktur (rate-limited) |
 | POST | `/chat` | `{question}` → `{answer, sources}` (rate-limited) |
@@ -112,15 +113,28 @@ Endpoint:
 Docs interaktif tersedia di `/docs`. CORS dan rate limit dikonfigurasi via env
 (`CORS_ALLOW_ORIGINS`, `RATE_LIMIT_PER_MINUTE`). Build image: `docker build -t indo-review-api .`
 
+## Frontend (web/)
+
+Aplikasi React + Vite dengan 4 tab: Dashboard (distribusi emosi), Coba Klasifikasi,
+Insight, dan Tanya Data (chat).
+
+```bash
+cd web
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # output ke web/dist
+```
+
+Set `VITE_API_BASE_URL` (lihat `web/.env.example`) ke URL backend.
+
 ## Testing & Linting
 
 ```bash
 pytest -q
 ruff check src tests
+cd web && npm run build
 ```
 
-<<<<<<< Updated upstream
-=======
 ## Deployment
 
 Arsitektur: **API** di Hugging Face Spaces (Docker), **web** di Vercel. Model
@@ -161,7 +175,6 @@ di setiap push/PR. Untuk auto-deploy ke Space, tambahkan remote git Space +
 
 > Uji lokal image: `docker build -t indo-review-api . && docker run -p 7860:7860 -e MODEL_DIR=<username>/indo-emotion-indobert -e GROQ_API_KEY=... indo-review-api`
 
->>>>>>> Stashed changes
 ## Dataset
 
 Emotion classification 3-kelas (`anger`, `happiness`, `sadness`) dari review
