@@ -1,5 +1,4 @@
-name: Sync to Hugging Face Hub
-
+name: Sync to Hugging Face hub
 on:
   push:
     branches:
@@ -15,12 +14,7 @@ jobs:
         with:
           fetch-depth: 0
           lfs: true
-
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          # e.g. "riezqidr/indo-review-intelligence"
-          HF_SPACE_REPO: ${{ secrets.HF_SPACE_REPO }}
-        run: |
-          HF_USER="${HF_SPACE_REPO%%/*}"
-          git push "https://${HF_USER}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}" main:main --force
+        run: git push https://riezqidr:$HF_TOKEN@huggingface.co/spaces/riezqidr/indo-emotion-classifier main:main --force
