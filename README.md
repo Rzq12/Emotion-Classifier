@@ -1,6 +1,6 @@
 ---
 title: Indo Review Intelligence
-emoji: 🇮🇩
+emoji: 😊
 colorFrom: green
 colorTo: gray
 sdk: docker
@@ -31,16 +31,16 @@ dan menjawab pertanyaan tim produk berbasis data review nyata.
 
 ## Tech Stack
 
-| Layer | Tools |
-|---|---|
-| Preprocessing | pandas, scikit-learn |
-| Model | HuggingFace Transformers (IndoBERT), PyTorch |
-| Tracking | MLflow (SQLite backend) |
-| Vector store | ChromaDB |
-| Embedding | sentence-transformers (multilingual MiniLM) |
-| LLM | Groq / Gemini / Ollama |
-| API | FastAPI |
-| Frontend | React + Vite (Fase 5) |
+| Layer         | Tools                                        |
+| ------------- | -------------------------------------------- |
+| Preprocessing | pandas, scikit-learn                         |
+| Model         | HuggingFace Transformers (IndoBERT), PyTorch |
+| Tracking      | MLflow (SQLite backend)                      |
+| Vector store  | ChromaDB                                     |
+| Embedding     | sentence-transformers (multilingual MiniLM)  |
+| LLM           | Groq / Gemini / Ollama                       |
+| API           | FastAPI                                      |
+| Frontend      | React + Vite (Fase 5)                        |
 
 ## Struktur Repo
 
@@ -124,13 +124,13 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 7860
 
 Endpoint:
 
-| Method | Path | Fungsi |
-|---|---|---|
-| GET | `/health` | Status model, vector DB, LLM provider |
-| GET | `/stats` | Statistik dataset (distribusi emosi, per-split) untuk dashboard |
-| POST | `/classify` | `{text}` → `{label, confidence}` |
-| POST | `/insight` | `{query}` → ringkasan terstruktur (rate-limited) |
-| POST | `/chat` | `{question}` → `{answer, sources}` (rate-limited) |
+| Method | Path        | Fungsi                                                          |
+| ------ | ----------- | --------------------------------------------------------------- |
+| GET    | `/health`   | Status model, vector DB, LLM provider                           |
+| GET    | `/stats`    | Statistik dataset (distribusi emosi, per-split) untuk dashboard |
+| POST   | `/classify` | `{text}` → `{label, confidence}`                                |
+| POST   | `/insight`  | `{query}` → ringkasan terstruktur (rate-limited)                |
+| POST   | `/chat`     | `{question}` → `{answer, sources}` (rate-limited)               |
 
 Docs interaktif tersedia di `/docs`. CORS dan rate limit dikonfigurasi via env
 (`CORS_ALLOW_ORIGINS`, `RATE_LIMIT_PER_MINUTE`). Build image: `docker build -t indo-review-api .`
@@ -218,11 +218,11 @@ python -m scripts.push_model_to_hub --repo <username>/indo-emotion-indobert
 Secret yang harus di-set di GitHub (**Settings → Secrets and variables →
 Actions**):
 
-| Secret | Isi |
-|---|---|
-| `HF_TOKEN` | Token HF dengan akses write (https://huggingface.co/settings/tokens) |
-| `HF_SPACE_REPO` | Repo Space, mis. `riezqidr/indo-review-intelligence` |
-| `HF_SPACE_URL` | URL health Space, mis. `https://riezqidr-indo-review-intelligence.hf.space/health` |
+| Secret          | Isi                                                                                |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `HF_TOKEN`      | Token HF dengan akses write (https://huggingface.co/settings/tokens)               |
+| `HF_SPACE_REPO` | Repo Space, mis. `riezqidr/indo-review-intelligence`                               |
+| `HF_SPACE_URL`  | URL health Space, mis. `https://riezqidr-indo-review-intelligence.hf.space/health` |
 
 > Catatan: workflow `schedule` (keep-alive) hanya berjalan dari branch default
 > (`main`) — pastikan workflow sudah ter-merge ke `main` di GitHub.
