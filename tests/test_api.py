@@ -48,8 +48,16 @@ class FakeInsight:
 
 
 class FakeChat:
-    def answer(self, question: str) -> dict:
-        return {"answer": "Keluhan utama soal pembayaran.", "sources": ["train_1", "val_2"]}
+    def __init__(self):
+        self.last_history = None
+
+    def answer(self, question: str, history: list | None = None) -> dict:
+        self.last_history = history
+        return {
+            "answer": "Keluhan utama soal pembayaran.",
+            "sources": ["train_1", "val_2"],
+            "cached": False,
+        }
 
 
 class FakePredictionLogger:
@@ -66,12 +74,17 @@ def prediction_logger():
 
 
 @pytest.fixture()
-def client(prediction_logger):
+def fake_chat():
+    return FakeChat()
+
+
+@pytest.fixture()
+def client(prediction_logger, fake_chat):
     app.dependency_overrides[get_classifier] = lambda: FakeClassifier()
     app.dependency_overrides[get_vector_store] = lambda: FakeStore()
     app.dependency_overrides[get_llm] = lambda: FakeLLM()
     app.dependency_overrides[get_insight_generator] = lambda: FakeInsight()
-    app.dependency_overrides[get_chat_responder] = lambda: FakeChat()
+    app.dependency_overrides[get_chat_responder] = lambda: fake_chat
     app.dependency_overrides[get_prediction_logger] = lambda: prediction_logger
     yield TestClient(app)
     app.dependency_overrides.clear()
@@ -132,6 +145,32 @@ def test_chat_ok(client):
 
 def test_chat_empty_question_422(client):
     r = client.post("/chat", json={"question": ""})
+    assert r.status_code == 422
+
+
+def test_chat_history_passed_to_responder(client, fake_chat):
+    r = client.post(
+        "/chat",
+        json={
+            "question": "lalu contohnya?",
+            "history": [
+                {"role": "user", "content": "apa keluhan?"},
+                {"role": "bot", "content": "soal bayar."},
+            ],
+        },
+    )
+    assert r.status_code == 200
+    assert fake_chat.last_history == [
+        {"role": "user", "content": "apa keluhan?"},
+        {"role": "bot", "content": "soal bayar."},
+    ]
+
+
+def test_chat_invalid_history_role_422(client):
+    r = client.post(
+        "/chat",
+        json={"question": "x", "history": [{"role": "sistem", "content": "y"}]},
+    )
     assert r.status_code == 422
 
 

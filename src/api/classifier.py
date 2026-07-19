@@ -50,8 +50,18 @@ class EmotionClassifier:
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
         self._torch = torch
-        self._tokenizer = AutoTokenizer.from_pretrained(self.model_dir)
-        self._model = AutoModelForSequenceClassification.from_pretrained(self.model_dir)
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(self.model_dir)
+            self._model = AutoModelForSequenceClassification.from_pretrained(self.model_dir)
+        except Exception as exc:  # noqa: BLE001 - HF raises many exception types here
+            # A missing local dir that looks like a repo id (e.g. the default
+            # "artifacts/indobert") must degrade to 503, not a raw 500.
+            self._model = None
+            self._tokenizer = None
+            raise ModelNotFoundError(
+                f"Model '{self.model_dir}' tidak bisa dimuat (path lokal tidak ada "
+                f"atau repo HF tidak ditemukan): {exc}"
+            ) from exc
         self._model.eval()
 
     def predict(self, text: str) -> dict:

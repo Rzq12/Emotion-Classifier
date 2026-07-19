@@ -53,11 +53,16 @@ export function Chat() {
   const send = (value) => {
     const question = (value ?? input).trim();
     if (!question || loading) return;
+    // Last 6 turns as context so follow-up questions stay coherent.
+    const history = messages
+      .filter((m) => !m.error)
+      .slice(-6)
+      .map((m) => ({ role: m.role, content: m.content }));
     setMessages((m) => [...m, { role: "user", content: question }]);
     setInput("");
     setLoading(true);
     api
-      .chat(question)
+      .chat(question, history)
       .then((res) =>
         setMessages((m) => [...m, { role: "bot", content: res.answer, sources: res.sources }]),
       )

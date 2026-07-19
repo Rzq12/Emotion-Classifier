@@ -1,7 +1,8 @@
 """Insight generation: retrieve negative reviews -> LLM -> structured summary.
 
 Grounded (FR-2.3): the LLM only sees retrieved reviews, and the result is cached
-per query to control LLM cost (FR-2.4).
+per query to control LLM cost (FR-2.4). ``example_review_ids`` returned by the
+LLM are validated against the retrieved set so hallucinated IDs never surface.
 """
 
 from __future__ import annotations
@@ -14,12 +15,16 @@ from cachetools import TTLCache
 
 from src.llm.base import LLMClient, LLMError
 from src.llm.prompt_loader import render_prompt
-from src.rag.embeddings import Embedder
 from src.rag.formatting import format_reviews
-from src.rag.vector_store import ReviewVectorStore
+from src.rag.retriever import HybridRetriever
 
 # Minimum reviews required before attempting a meaningful insight (UIUX_FLOW 3.2).
 MIN_REVIEWS_FOR_INSIGHT = 5
+
+SAMPLE_NOTE = (
+    "Statistik tema dihitung dari {n} review paling relevan dengan fokus ini, "
+    "bukan dari seluruh korpus."
+)
 
 
 @dataclass
@@ -35,13 +40,11 @@ class InsightGenerator:
 
     def __init__(
         self,
-        store: ReviewVectorStore,
-        embedder: Embedder,
+        retriever: HybridRetriever,
         llm: LLMClient,
         config: InsightConfig | None = None,
     ):
-        self.store = store
-        self.embedder = embedder
+        self.retriever = retriever
         self.llm = llm
         self.config = config or InsightConfig()
         self._cache: TTLCache = TTLCache(
@@ -50,24 +53,25 @@ class InsightGenerator:
         )
 
     def _cache_key(self, query: str) -> str:
-        raw = f"{query}|{sorted(self.config.negative_emotions)}|{self.config.top_k}"
+        # Include provider/model so switching LLMs never serves stale results.
+        llm_id = f"{getattr(self.llm, 'provider', '?')}:{getattr(self.llm, 'model', '?')}"
+        raw = f"{llm_id}|{query}|{sorted(self.config.negative_emotions)}|{self.config.top_k}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def generate(self, query: str = "keluhan utama pengguna", use_cache: bool = True) -> dict:
         """Return a structured insight dict for the given focus query.
 
         Result shape: ``{summary, themes[], sample_quotes[], recommendations[],
-        cached, n_reviews}``.
+        note, cached, n_reviews}``.
         """
         key = self._cache_key(query)
         if use_cache and key in self._cache:
             return {**self._cache[key], "cached": True}
 
-        query_vec = self.embedder.encode_one(query)
-        reviews = self.store.query(
-            query_embedding=query_vec,
+        reviews = self.retriever.query(
+            query,
             n_results=self.config.top_k,
-            where={"emotion": {"$in": self.config.negative_emotions}},
+            emotions=self.config.negative_emotions,
         )
 
         if len(reviews) < MIN_REVIEWS_FOR_INSIGHT:
@@ -76,6 +80,7 @@ class InsightGenerator:
                 "themes": [],
                 "sample_quotes": [],
                 "recommendations": [],
+                "note": "",
                 "cached": False,
                 "n_reviews": len(reviews),
             }
@@ -87,12 +92,22 @@ class InsightGenerator:
             raise LLMError(f"Insight generation failed: {exc}") from exc
 
         result = _parse_insight_json(raw)
+        _validate_example_ids(result, {r.review_id for r in reviews})
+        result["note"] = SAMPLE_NOTE.format(n=len(reviews))
         result["cached"] = False
         result["n_reviews"] = len(reviews)
 
         if use_cache:
             self._cache[key] = {k: v for k, v in result.items() if k != "cached"}
         return result
+
+
+def _validate_example_ids(result: dict, retrieved_ids: set[str]) -> None:
+    """Drop hallucinated review IDs the LLM was never shown (in place)."""
+    for theme in result.get("themes", []):
+        if isinstance(theme, dict):
+            ids = theme.get("example_review_ids", [])
+            theme["example_review_ids"] = [i for i in ids if i in retrieved_ids]
 
 
 def _parse_insight_json(raw: str) -> dict:
