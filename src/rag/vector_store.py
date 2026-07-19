@@ -17,16 +17,28 @@ class RetrievedReview:
     review_id: str
     text: str
     emotion: str
-    score: float  # cosine similarity in [0, 1]
+    score: float  # cosine similarity in [0, 1]; 0.0 for lexical-only hits
+    bm25_score: float = 0.0  # lexical (BM25) score; 0.0 for vector-only hits
 
 
 class ReviewVectorStore:
     """Thin wrapper around a persistent ChromaDB collection."""
 
     def __init__(self, persist_dir: str = "chroma_db", collection_name: str = "reviews"):
-        import chromadb
+        import logging
 
-        self._client = chromadb.PersistentClient(path=persist_dir)
+        import chromadb
+        from chromadb.config import Settings
+
+        # chromadb 0.5.x ignores the telemetry opt-out for some events and its
+        # posthog client is broken anyway ("capture() takes 1 positional
+        # argument..."); silence the noisy logger on top of opting out.
+        logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
+
+        self._client = chromadb.PersistentClient(
+            path=persist_dir,
+            settings=Settings(anonymized_telemetry=False),
+        )
         self._collection = self._client.get_or_create_collection(
             name=collection_name,
             metadata={"hnsw:space": "cosine"},
@@ -34,6 +46,15 @@ class ReviewVectorStore:
 
     def count(self) -> int:
         return self._collection.count()
+
+    def reset(self) -> None:
+        """Drop and recreate the collection (full re-index, no stale vectors)."""
+        name = self._collection.name
+        self._client.delete_collection(name)
+        self._collection = self._client.get_or_create_collection(
+            name=name,
+            metadata={"hnsw:space": "cosine"},
+        )
 
     def add(
         self,

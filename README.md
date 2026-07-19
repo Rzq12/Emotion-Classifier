@@ -98,12 +98,23 @@ untuk smoke test cepat.
 ### 3. RAG (insight & chat)
 
 ```bash
-python -m src.rag.build_index --config configs/rag.yaml   # embed review ke ChromaDB
+python -m src.rag.build_index --config configs/rag.yaml --reset  # embed review ke ChromaDB
+python -m src.rag.evaluate_retrieval                             # eval kualitas retrieval
 ```
 
+Retrieval bersifat **hybrid**: vector search (ChromaDB + multilingual MiniLM)
+digabung BM25 lexical via Reciprocal Rank Fusion — kata kunci eksak ("dana",
+"voucher") tetap tertangkap meski embedding meleset. Query dinormalisasi dengan
+preprocessing yang sama dengan korpus (slang Indo, emoji). Gerbang relevansi
+chat (`min_score` 0.55) dikalibrasi dari golden set
+(`configs/retrieval_eval.yaml`): hit@1 1.0, dan query di luar domain ditolak.
+
 Insight & chatbot diakses lewat `InsightGenerator` / `ChatResponder`
-(`src/rag/`). Pilih provider LLM via `LLM_PROVIDER` di `.env`. Retrieval berjalan
-tanpa API key; generasi insight/chat memerlukan key LLM.
+(`src/rag/`) — keduanya di-cache (TTL) dan jawaban chat menyertakan hanya
+review ID yang benar-benar dikutip. Chat mendukung riwayat percakapan
+(multi-turn) lewat field `history`. Pilih provider LLM via `LLM_PROVIDER` di
+`.env`. Retrieval berjalan tanpa API key; generasi insight/chat memerlukan key
+LLM.
 
 ### 4. API (FastAPI)
 

@@ -118,4 +118,5 @@ def insight(
 @app.post("/chat", response_model=schemas.ChatResponse)
 @limiter.limit(_rate)
 def chat(request: Request, body: schemas.ChatRequest, responder: ChatDep) -> schemas.ChatResponse:
-    return schemas.ChatResponse(**responder.answer(body.question))
+    history = [m.model_dump() for m in body.history]
+    return schemas.ChatResponse(**responder.answer(body.question, history=history))

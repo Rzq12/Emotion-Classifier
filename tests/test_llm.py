@@ -22,7 +22,7 @@ def test_factory_unknown_provider_raises():
 
 
 def test_availability_depends_on_key(monkeypatch):
-    monkeypatch.setenv("GROQ_API_KEY", "")
+    _clear_groq_env(monkeypatch)  # .env may define real keys; isolate the test
     assert GroqClient().is_available() is False
     monkeypatch.setenv("GROQ_API_KEY", "fake-key")
     assert GroqClient().is_available() is True
@@ -107,6 +107,12 @@ def test_groq_all_keys_exhausted_raises_llmerror(monkeypatch):
 
 
 def test_render_prompt_substitutes_fields():
-    out = render_prompt("chat.txt", reviews="[t_1] (anger) buruk", question="kenapa?")
+    out = render_prompt(
+        "chat.txt",
+        history="Pengguna: halo",
+        reviews="[t_1] (anger) buruk",
+        question="kenapa?",
+    )
     assert "[t_1] (anger) buruk" in out
     assert "kenapa?" in out
+    assert "Pengguna: halo" in out

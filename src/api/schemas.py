@@ -41,20 +41,32 @@ class InsightResponse(BaseModel):
     themes: list[Theme] = Field(default_factory=list)
     sample_quotes: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
+    note: str = Field("", description="Disclaimer: statistik dihitung dari sampel retrieval.")
     n_reviews: int = 0
     cached: bool = False
 
 
 # --- /chat ----------------------------------------------------------------
 
+class ChatMessage(BaseModel):
+    role: str = Field(..., pattern="^(user|bot|assistant)$")
+    content: str = Field(..., min_length=1, max_length=MAX_TEXT_LEN)
+
+
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=MAX_TEXT_LEN)
+    history: list[ChatMessage] = Field(
+        default_factory=list,
+        max_length=12,
+        description="Riwayat percakapan (paling lama di depan), opsional.",
+    )
     session_id: str | None = None
 
 
 class ChatResponse(BaseModel):
     answer: str
     sources: list[str] = Field(default_factory=list)
+    cached: bool = False
 
 
 # --- /health --------------------------------------------------------------
