@@ -10,6 +10,7 @@ from src.api.classifier import EmotionClassifier
 from src.api.config import get_settings
 from src.llm.base import LLMClient
 from src.llm.factory import get_llm_client
+from src.monitoring.prediction_log import PredictionLogger
 from src.rag.chat import ChatConfig, ChatResponder
 from src.rag.embeddings import Embedder
 from src.rag.insight import InsightConfig, InsightGenerator
@@ -25,6 +26,11 @@ def _rag_cfg() -> dict:
 @lru_cache
 def get_classifier() -> EmotionClassifier:
     return EmotionClassifier(model_dir=get_settings().model_dir)
+
+
+@lru_cache
+def get_prediction_logger() -> PredictionLogger:
+    return PredictionLogger(get_settings().prediction_log_path)
 
 
 @lru_cache

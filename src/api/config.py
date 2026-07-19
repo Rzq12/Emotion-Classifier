@@ -22,6 +22,9 @@ class Settings:
     llm_provider: str = os.getenv("LLM_PROVIDER", "groq")
     rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "10"))
     cors_allow_origins: list[str] = field(default_factory=_origins)
+    prediction_log_path: str = os.getenv(
+        "PREDICTION_LOG_PATH", "data/monitoring/predictions.jsonl"
+    )
 
 
 def get_settings() -> Settings:

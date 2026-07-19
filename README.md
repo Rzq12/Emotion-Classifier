@@ -46,9 +46,10 @@ dan menjawab pertanyaan tim produk berbasis data review nyata.
 │   ├── rag/            # embedding, vector store, insight & chat
 │   ├── llm/            # LLM client (Groq/Gemini/Ollama) + prompt
 │   ├── api/            # FastAPI app (Fase 4)
-│   └── monitoring/     # logging & drift (Fase 6)
+│   └── monitoring/     # logging prediksi + drift check (PSI)
+├── reports/            # contoh drift report
 ├── tests/              # unit test
-└── web/                # frontend React (Fase 5)
+└── web/                # frontend React (Vite + Tailwind)
 ```
 
 ## Setup
@@ -105,6 +106,7 @@ Endpoint:
 | Method | Path | Fungsi |
 |---|---|---|
 | GET | `/health` | Status model, vector DB, LLM provider |
+| GET | `/stats` | Statistik dataset (distribusi emosi, per-split) untuk dashboard |
 | POST | `/classify` | `{text}` → `{label, confidence}` |
 | POST | `/insight` | `{query}` → ringkasan terstruktur (rate-limited) |
 | POST | `/chat` | `{question}` → `{answer, sources}` (rate-limited) |
@@ -112,15 +114,45 @@ Endpoint:
 Docs interaktif tersedia di `/docs`. CORS dan rate limit dikonfigurasi via env
 (`CORS_ALLOW_ORIGINS`, `RATE_LIMIT_PER_MINUTE`). Build image: `docker build -t indo-review-api .`
 
+## Frontend (web/)
+
+Aplikasi React + Vite dengan 4 tab: Dashboard (distribusi emosi), Coba Klasifikasi,
+Insight, dan Tanya Data (chat).
+
+```bash
+cd web
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # output ke web/dist
+```
+
+Set `VITE_API_BASE_URL` (lihat `web/.env.example`) ke URL backend.
+
+## Monitoring
+
+Setiap prediksi `/classify` otomatis di-log (timestamp, teks, label, confidence)
+ke JSONL — path via env `PREDICTION_LOG_PATH` (default
+`data/monitoring/predictions.jsonl`), ditulis non-blocking setelah response.
+
+Drift check dijalankan manual:
+
+```bash
+python -m src.monitoring.check_drift              # log prediksi vs train.csv
+python -m src.monitoring.check_drift --simulate   # demo: sample sengaja drifted
+```
+
+Metrik: **PSI** distribusi label & panjang teks (ambang 0.1 moderat / 0.2 drift)
+plus porsi prediksi low-confidence. Report markdown ditulis ke
+`reports/drift_report.md` (contoh hasil simulasi ter-commit di repo).
+
 ## Testing & Linting
 
 ```bash
 pytest -q
 ruff check src tests
+cd web && npm run build
 ```
 
-<<<<<<< Updated upstream
-=======
 ## Deployment
 
 Arsitektur: **API** di Hugging Face Spaces (Docker), **web** di Vercel. Model
@@ -161,7 +193,6 @@ di setiap push/PR. Untuk auto-deploy ke Space, tambahkan remote git Space +
 
 > Uji lokal image: `docker build -t indo-review-api . && docker run -p 7860:7860 -e MODEL_DIR=<username>/indo-emotion-indobert -e GROQ_API_KEY=... indo-review-api`
 
->>>>>>> Stashed changes
 ## Dataset
 
 Emotion classification 3-kelas (`anger`, `happiness`, `sadness`) dari review

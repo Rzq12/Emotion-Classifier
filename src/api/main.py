@@ -10,7 +10,7 @@ FastAPI can resolve body/dependency types through the slowapi rate-limit wrapper
 
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -25,9 +25,11 @@ from src.api.dependencies import (
     get_classifier,
     get_insight_generator,
     get_llm,
+    get_prediction_logger,
     get_vector_store,
 )
 from src.llm.base import LLMClient, LLMError
+from src.monitoring.prediction_log import PredictionLogger
 from src.rag.chat import ChatResponder
 from src.rag.insight import InsightGenerator
 from src.rag.vector_store import ReviewVectorStore
@@ -53,6 +55,7 @@ StoreDep = Annotated[ReviewVectorStore, Depends(get_vector_store)]
 LLMDep = Annotated[LLMClient, Depends(get_llm)]
 InsightDep = Annotated[InsightGenerator, Depends(get_insight_generator)]
 ChatDep = Annotated[ChatResponder, Depends(get_chat_responder)]
+PredictionLoggerDep = Annotated[PredictionLogger, Depends(get_prediction_logger)]
 
 
 @app.exception_handler(LLMError)
@@ -78,12 +81,28 @@ def health(classifier: ClassifierDep, store: StoreDep, llm: LLMDep) -> schemas.H
     )
 
 
+@app.get("/stats", response_model=schemas.StatsResponse)
+def stats() -> schemas.StatsResponse:
+    from src.api.stats import compute_stats
+
+    return schemas.StatsResponse(**compute_stats())
+
+
 @app.post("/classify", response_model=schemas.ClassifyResponse)
-def classify(body: schemas.ClassifyRequest, classifier: ClassifierDep) -> schemas.ClassifyResponse:
+def classify(
+    body: schemas.ClassifyRequest,
+    background_tasks: BackgroundTasks,
+    classifier: ClassifierDep,
+    prediction_logger: PredictionLoggerDep,
+) -> schemas.ClassifyResponse:
     try:
         result = classifier.predict(body.text)
     except ModelNotFoundError as exc:
         raise HTTPException(status_code=503, detail="Model classifier belum tersedia.") from exc
+    # Monitoring log runs after the response is sent (non-blocking).
+    background_tasks.add_task(
+        prediction_logger.log, body.text, result["label"], result["confidence"]
+    )
     return schemas.ClassifyResponse(**result)
 
 
