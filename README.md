@@ -46,9 +46,10 @@ dan menjawab pertanyaan tim produk berbasis data review nyata.
 │   ├── rag/            # embedding, vector store, insight & chat
 │   ├── llm/            # LLM client (Groq/Gemini/Ollama) + prompt
 │   ├── api/            # FastAPI app (Fase 4)
-│   └── monitoring/     # logging & drift (Fase 6)
+│   └── monitoring/     # logging prediksi + drift check (PSI)
+├── reports/            # contoh drift report
 ├── tests/              # unit test
-└── web/                # frontend React (Fase 5)
+└── web/                # frontend React (Vite + Tailwind)
 ```
 
 ## Setup
@@ -126,6 +127,23 @@ npm run build    # output ke web/dist
 ```
 
 Set `VITE_API_BASE_URL` (lihat `web/.env.example`) ke URL backend.
+
+## Monitoring
+
+Setiap prediksi `/classify` otomatis di-log (timestamp, teks, label, confidence)
+ke JSONL — path via env `PREDICTION_LOG_PATH` (default
+`data/monitoring/predictions.jsonl`), ditulis non-blocking setelah response.
+
+Drift check dijalankan manual:
+
+```bash
+python -m src.monitoring.check_drift              # log prediksi vs train.csv
+python -m src.monitoring.check_drift --simulate   # demo: sample sengaja drifted
+```
+
+Metrik: **PSI** distribusi label & panjang teks (ambang 0.1 moderat / 0.2 drift)
+plus porsi prediksi low-confidence. Report markdown ditulis ke
+`reports/drift_report.md` (contoh hasil simulasi ter-commit di repo).
 
 ## Testing & Linting
 

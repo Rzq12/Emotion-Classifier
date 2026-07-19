@@ -9,6 +9,7 @@ from src.api.dependencies import (
     get_classifier,
     get_insight_generator,
     get_llm,
+    get_prediction_logger,
     get_vector_store,
 )
 from src.api.main import app
@@ -51,13 +52,27 @@ class FakeChat:
         return {"answer": "Keluhan utama soal pembayaran.", "sources": ["train_1", "val_2"]}
 
 
+class FakePredictionLogger:
+    def __init__(self):
+        self.records = []
+
+    def log(self, text: str, label: str, confidence: float) -> None:
+        self.records.append({"text": text, "label": label, "confidence": confidence})
+
+
 @pytest.fixture()
-def client():
+def prediction_logger():
+    return FakePredictionLogger()
+
+
+@pytest.fixture()
+def client(prediction_logger):
     app.dependency_overrides[get_classifier] = lambda: FakeClassifier()
     app.dependency_overrides[get_vector_store] = lambda: FakeStore()
     app.dependency_overrides[get_llm] = lambda: FakeLLM()
     app.dependency_overrides[get_insight_generator] = lambda: FakeInsight()
     app.dependency_overrides[get_chat_responder] = lambda: FakeChat()
+    app.dependency_overrides[get_prediction_logger] = lambda: prediction_logger
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -78,6 +93,14 @@ def test_classify_ok(client):
     body = r.json()
     assert body["label"] == "anger"
     assert 0.0 <= body["confidence"] <= 1.0
+
+
+def test_classify_logs_prediction(client, prediction_logger):
+    r = client.post("/classify", json={"text": "aplikasi error terus"})
+    assert r.status_code == 200
+    assert prediction_logger.records == [
+        {"text": "aplikasi error terus", "label": "anger", "confidence": 0.91}
+    ]
 
 
 def test_classify_empty_text_422(client):

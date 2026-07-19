@@ -3,6 +3,7 @@
 # ---------------------------------------------------------------------------
 *.md
 !README.md
+!reports/*.md
 .agents/
 skills-lock.json
 
@@ -73,6 +74,7 @@ mlflow.db
 chroma_db/
 *.sqlite3
 prediction_logs*.jsonl
+data/monitoring/
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
