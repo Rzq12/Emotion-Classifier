@@ -10,14 +10,34 @@ data:
 mlflow:
   experiment: "indo-review-emotion"
 
-# --- Baseline: TF-IDF + Logistic Regression ---
+# --- Baseline: TF-IDF (word + char) + classifier klasik ---
 baseline:
-  ngram_range: [1, 2]
+  word_ngram_range: [1, 2]
+  # Char n-gram (char_wb): dicoba [3, 5] tapi MENURUNKAN F1-macro di dataset ini
+  # (0.752 -> 0.739 logreg; lihat EXPERIMENTS.md 2026-07-20) — default null.
+  char_ngram_range: null
   min_df: 2
-  max_features: 20000
+  max_features: 20000           # per vectorizer (word dan char masing-masing)
+  classifier: "logreg"          # logreg | linearsvc (bisa dioverride via --classifier)
   C: 1.0
   max_iter: 1000
   class_weight_balanced: true   # handle imbalance (anger minoritas)
+
+# --- Embedding MiniLM + Logistic Regression ---
+embed_baseline:
+  model_name: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  batch_size: 64
+  C: 1.0
+  max_iter: 2000
+  class_weight_balanced: true
+
+# --- SetFit (few-shot, contrastive fine-tuning di atas MiniLM) ---
+setfit:
+  model_name: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  samples_per_class: 64         # setting few-shot klasik SetFit
+  num_epochs: 1
+  batch_size: 16
+  seed: 42
 
 # --- IndoBERT fine-tuning ---
 indobert:
