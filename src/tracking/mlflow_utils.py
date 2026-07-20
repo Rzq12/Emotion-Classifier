@@ -8,18 +8,33 @@ place. Tracking URI defaults to the local ``./mlruns`` dir (overridable via the
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 
 import mlflow
 import pandas as pd
+from dotenv import load_dotenv
 
 DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
 DEFAULT_EXPERIMENT = "indo-review-emotion"
 
 
 def setup_tracking(experiment: str = DEFAULT_EXPERIMENT) -> None:
-    """Configure tracking URI (from env or default) and active experiment."""
+    """Configure tracking URI (from env or default) and active experiment.
+
+    Loads ``.env`` first so remote tracking (e.g. DagsHub via
+    ``MLFLOW_TRACKING_URI`` + ``MLFLOW_TRACKING_USERNAME``/``PASSWORD``) works
+    from training scripts too — previously only the API loaded dotenv, so
+    training silently fell back to the local SQLite store.
+    """
+    load_dotenv()
+    # MLflow 3.x prints an emoji banner on run end; Windows cp1252 consoles
+    # raise UnicodeEncodeError there, killing the process before the run is
+    # marked FINISHED. Force UTF-8 (best effort) so logging always completes.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI)
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(experiment)
