@@ -23,6 +23,22 @@ baseline:
   max_iter: 1000
   class_weight_balanced: true   # handle imbalance (anger minoritas)
 
+# --- Embedding MiniLM + Logistic Regression ---
+embed_baseline:
+  model_name: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  batch_size: 64
+  C: 1.0
+  max_iter: 2000
+  class_weight_balanced: true
+
+# --- SetFit (few-shot, contrastive fine-tuning di atas MiniLM) ---
+setfit:
+  model_name: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  samples_per_class: 64         # setting few-shot klasik SetFit
+  num_epochs: 1
+  batch_size: 16
+  seed: 42
+
 # --- IndoBERT fine-tuning ---
 indobert:
   model_name: "indobenchmark/indobert-base-p1"

@@ -69,6 +69,9 @@ data/processed/
 *.safetensors
 mlruns/
 mlartifacts/
+# Output dir SetFit/HF Trainer
+checkpoints/
+runs/
 artifacts/
 mlflow.db
 .dvc/cache/
