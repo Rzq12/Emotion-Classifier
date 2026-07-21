@@ -1,10 +1,13 @@
-"""Baseline emotion classifier: TF-IDF + Logistic Regression.
+"""Baseline emotion classifier: TF-IDF (word + char n-gram) + classic classifier.
 
 This is the mandatory classical baseline (CLAUDE.md): IndoBERT must beat it on
 F1-macro before we claim it adds value. Fast, CPU-friendly, fully logged to MLflow.
+Char n-grams (char_wb) are robust to the typos/slang common in app reviews
+("gabisa", "gbs"); the classifier is selectable (logreg | linearsvc).
 
 Run:
     python -m src.training.baseline --config configs/training.yaml
+    python -m src.training.baseline --config configs/training.yaml --classifier linearsvc
 """
 
 from __future__ import annotations
@@ -16,43 +19,57 @@ import mlflow
 import yaml
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import FeatureUnion, Pipeline
+from sklearn.svm import LinearSVC
 
 from src.tracking.mlflow_utils import log_confusion_matrix, setup_tracking
 from src.training.dataset import load_dataset
 from src.training.metrics import compute_metrics, confusion_matrix_df
 
 
-def build_pipeline(cfg: dict) -> Pipeline:
-    """Construct the TF-IDF + LogisticRegression pipeline from config."""
-    b = cfg["baseline"]
-    return Pipeline(
-        [
-            (
-                "tfidf",
-                TfidfVectorizer(
-                    ngram_range=tuple(b["ngram_range"]),
-                    min_df=b["min_df"],
-                    max_features=b["max_features"],
-                    sublinear_tf=True,
-                ),
-            ),
-            (
-                "clf",
-                LogisticRegression(
-                    C=b["C"],
-                    max_iter=b["max_iter"],
-                    class_weight="balanced" if b["class_weight_balanced"] else None,
-                ),
-            ),
-        ]
+def _build_vectorizer(b: dict) -> TfidfVectorizer | FeatureUnion:
+    """Word TF-IDF, optionally unioned with a char_wb TF-IDF."""
+    word = TfidfVectorizer(
+        ngram_range=tuple(b["word_ngram_range"]),
+        min_df=b["min_df"],
+        max_features=b["max_features"],
+        sublinear_tf=True,
     )
+    if not b.get("char_ngram_range"):
+        return word
+    char = TfidfVectorizer(
+        analyzer="char_wb",
+        ngram_range=tuple(b["char_ngram_range"]),
+        min_df=b["min_df"],
+        max_features=b["max_features"],
+        sublinear_tf=True,
+    )
+    return FeatureUnion([("word", word), ("char", char)])
 
 
-def run(config_path: str) -> dict[str, float]:
+def _build_classifier(b: dict):
+    """Instantiate the configured classifier (logreg | linearsvc)."""
+    class_weight = "balanced" if b["class_weight_balanced"] else None
+    name = b.get("classifier", "logreg")
+    if name == "logreg":
+        return LogisticRegression(C=b["C"], max_iter=b["max_iter"], class_weight=class_weight)
+    if name == "linearsvc":
+        return LinearSVC(C=b["C"], max_iter=b["max_iter"], class_weight=class_weight)
+    raise ValueError(f"Unknown baseline classifier '{name}' (expected logreg | linearsvc).")
+
+
+def build_pipeline(cfg: dict) -> Pipeline:
+    """Construct the TF-IDF + classifier pipeline from config."""
+    b = cfg["baseline"]
+    return Pipeline([("tfidf", _build_vectorizer(b)), ("clf", _build_classifier(b))])
+
+
+def run(config_path: str, classifier: str | None = None) -> dict[str, float]:
     """Train the baseline, evaluate on val + test, and log everything to MLflow."""
     with open(config_path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+    if classifier:
+        cfg["baseline"]["classifier"] = classifier
 
     data = load_dataset(
         cfg["data"]["train_csv"],
@@ -63,13 +80,17 @@ def run(config_path: str) -> dict[str, float]:
     setup_tracking(cfg["mlflow"]["experiment"])
     pipeline = build_pipeline(cfg)
 
-    with mlflow.start_run(run_name="baseline-tfidf-logreg"):
+    b = cfg["baseline"]
+    features = "tfidf-word-char" if b.get("char_ngram_range") else "tfidf-word"
+    run_name = f"baseline-{features}-{b.get('classifier', 'logreg')}"
+
+    with mlflow.start_run(run_name=run_name):
         mlflow.set_tag("model_type", "baseline")
         mlflow.log_params(
             {
-                "vectorizer": "tfidf",
-                "classifier": "logistic_regression",
-                **{f"tfidf_{k}": v for k, v in cfg["baseline"].items()},
+                "vectorizer": features,
+                "classifier": b.get("classifier", "logreg"),
+                **{f"tfidf_{k}": v for k, v in b.items()},
             }
         )
 
@@ -107,10 +128,16 @@ def run(config_path: str) -> dict[str, float]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train TF-IDF + LogReg baseline.")
+    parser = argparse.ArgumentParser(description="Train classical TF-IDF baseline.")
     parser.add_argument("--config", default="configs/training.yaml")
+    parser.add_argument(
+        "--classifier",
+        choices=["logreg", "linearsvc"],
+        default=None,
+        help="Override the classifier from config.",
+    )
     args = parser.parse_args()
-    run(args.config)
+    run(args.config, classifier=args.classifier)
 
 
 if __name__ == "__main__":
