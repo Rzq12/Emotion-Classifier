@@ -13,11 +13,11 @@ from typing import Annotated
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from src.api import schemas
+from src.api.agent_routes import router as agent_router
 from src.api.classifier import EmotionClassifier, ModelNotFoundError
 from src.api.config import get_settings
 from src.api.dependencies import (
@@ -28,6 +28,7 @@ from src.api.dependencies import (
     get_prediction_logger,
     get_vector_store,
 )
+from src.api.limiter import RATE, limiter
 from src.llm.base import LLMClient, LLMError
 from src.monitoring.prediction_log import PredictionLogger
 from src.rag.chat import ChatResponder
@@ -35,8 +36,7 @@ from src.rag.insight import InsightGenerator
 from src.rag.vector_store import ReviewVectorStore
 
 settings = get_settings()
-limiter = Limiter(key_func=get_remote_address)
-_rate = f"{settings.rate_limit_per_minute}/minute"
+_rate = RATE
 
 app = FastAPI(title="Indo Review Intelligence API", version="0.1.0")
 app.state.limiter = limiter
@@ -48,6 +48,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(agent_router)
 
 # Dependency aliases (Annotated style avoids B008 and reads cleanly).
 ClassifierDep = Annotated[EmotionClassifier, Depends(get_classifier)]

@@ -5,12 +5,14 @@ import { Dashboard } from "./pages/Dashboard";
 import { Classify } from "./pages/Classify";
 import { Insight } from "./pages/Insight";
 import { Chat } from "./pages/Chat";
+import { AgentQueue } from "./pages/AgentQueue";
 
 const PAGES = {
   dashboard: Dashboard,
   classify: Classify,
   insight: Insight,
   chat: Chat,
+  agent: AgentQueue,
 };
 
 export default function App() {

@@ -26,6 +26,10 @@ dan menjawab pertanyaan tim produk berbasis data review nyata.
   dari review beremosi negatif, di-grounding ke data dan di-cache.
 - **Chatbot internal:** menjawab pertanyaan bebas dengan grounding ke review
   ter-retrieve (anti-halusinasi) dan menyertakan sumber.
+- **Agentic layer (LangGraph):** classifier jadi salah satu _tool_ dalam state
+  graph yang me-_route_ review (eskalasi / draft empati / arsip) berdasarkan
+  confidence, membuat draft balasan yang di-_grounding_ ke RAG, dan menyimpan ke
+  antrean untuk approval manusia (human-in-the-loop) + notifikasi eskalasi.
 - **Experiment tracking:** MLflow (metrik utama F1-macro, confusion matrix, registry).
 - **LLM provider-agnostic:** Groq / Gemini / Ollama lewat satu interface.
 
@@ -39,6 +43,7 @@ dan menjawab pertanyaan tim produk berbasis data review nyata.
 | Vector store  | ChromaDB                                     |
 | Embedding     | sentence-transformers (multilingual MiniLM)  |
 | LLM           | Groq / Gemini / Ollama                       |
+| Agent         | LangGraph (state machine) + SQLite queue     |
 | API           | FastAPI                                      |
 | Frontend      | React + Vite (Fase 5)                        |
 
@@ -55,7 +60,8 @@ dan menjawab pertanyaan tim produk berbasis data review nyata.
 │   ├── tracking/       # helper MLflow + model registry
 │   ├── rag/            # embedding, vector store, insight & chat
 │   ├── llm/            # LLM client (Groq/Gemini/Ollama) + prompt
-│   ├── api/            # FastAPI app (Fase 4)
+│   ├── agent/          # agentic layer LangGraph (state, router, nodes, graph, queue)
+│   ├── api/            # FastAPI app (Fase 4) + endpoint /agent (Fase 6)
 │   └── monitoring/     # logging prediksi + drift check (PSI)
 ├── reports/            # contoh drift report
 ├── tests/              # unit test
@@ -135,10 +141,48 @@ Endpoint:
 Docs interaktif tersedia di `/docs`. CORS dan rate limit dikonfigurasi via env
 (`CORS_ALLOW_ORIGINS`, `RATE_LIMIT_PER_MINUTE`). Build image: `docker build -t indo-review-api .`
 
+### 5. Agentic layer (Fase 6)
+
+Melapisi classifier pasif dengan **agent** berbasis LangGraph. Alih-alih hanya
+mengembalikan label, agent membuat keputusan dan bertindak:
+
+```
+START → classify → route_by_emotion ─┬─ escalate  (anger, confidence tinggi) ─┐
+                                     ├─ draft     (negatif lain → draft empati) ├─ END
+                                     └─ archive   (positif → arsip)             ┘
+```
+
+- **Router (`src/agent/router.py`)** — keputusan inti: `anger` dengan confidence
+  ≥ ambang (`escalate_min_confidence`, default 0.75) di-**eskalasi**; emosi
+  negatif lain dibuatkan **draft**; positif di-**arsip**. Label tak dikenal
+  jatuh ke `draft` (selalu dilihat manusia). Ambang & label diatur di
+  `configs/agent.yaml`, bukan hardcode.
+- **Draft ter-grounding** — node escalate/draft me-retrieve review serupa lewat
+  RAG hybrid yang sudah ada, lalu LLM menulis draft **hanya** dari konteks itu
+  (anti-halusinasi). Gagal LLM → fallback draft aman, bukan crash.
+- **Human-in-the-loop** — tiap run disimpan sebagai tiket `pending` di SQLite
+  (`agent_queue.db`); reviewer approve/reject sebelum draft "dikirim".
+- **Notifikasi eskalasi** — Telegram bot bila `TELEGRAM_BOT_TOKEN` +
+  `TELEGRAM_CHAT_ID` di-set, jika tidak fallback ke log file
+  (`data/monitoring/escalations.log`).
+
+| Method | Path                   | Fungsi                                              |
+| ------ | ---------------------- | --------------------------------------------------- |
+| POST   | `/agent/run`           | `{review_text}` → jalankan graph, simpan tiket (rate-limited) |
+| GET    | `/agent/queue`         | List tiket (filter `?status=pending\|approved\|rejected`)     |
+| POST   | `/agent/approve/{id}`  | Setujui draft → kirim notifikasi                    |
+| POST   | `/agent/reject/{id}`   | `{reason}` → tolak draft, catat alasan              |
+| GET    | `/agent/stats`         | Metrik antrean (escalation count, approval rate)    |
+
+Konfigurasi via `configs/agent.yaml` (threshold router, `top_k` grounding, path
+queue) dan env (`AGENT_CONFIG`, `AGENT_QUEUE_DB`, `TELEGRAM_*`). LangGraph
+opsional saat runtime: jika paket tak tersedia, agent otomatis fallback ke
+eksekutor sekuensial ekuivalen (graceful degradation).
+
 ## Frontend (web/)
 
-Aplikasi React + Vite dengan 4 tab: Dashboard (distribusi emosi), Coba Klasifikasi,
-Insight, dan Tanya Data (chat).
+Aplikasi React + Vite dengan 5 tab: Dashboard (distribusi emosi), Coba Klasifikasi,
+Insight, Tanya Data (chat), dan **Agent Queue** (demo agent + approval tiket).
 
 ```bash
 cd web

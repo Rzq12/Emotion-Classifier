@@ -41,6 +41,19 @@ export const api = {
   insight: (query) => request("/insight", { method: "POST", body: JSON.stringify({ query }) }),
   chat: (question, history = []) =>
     request("/chat", { method: "POST", body: JSON.stringify({ question, history }) }),
+
+  // --- Agentic layer (Fase 6) ---
+  agentRun: (reviewText) =>
+    request("/agent/run", { method: "POST", body: JSON.stringify({ review_text: reviewText }) }),
+  agentQueue: (status) =>
+    request(`/agent/queue${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  agentStats: () => request("/agent/stats"),
+  agentApprove: (id) => request(`/agent/approve/${encodeURIComponent(id)}`, { method: "POST" }),
+  agentReject: (id, reason = "") =>
+    request(`/agent/reject/${encodeURIComponent(id)}`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
 };
 
 export { ApiError, BASE_URL };

@@ -1,0 +1,32 @@
+# ---------------------------------------------------------------------------
+# Konfigurasi Agentic layer (Fase 6).
+# Pola sama seperti configs/rag.yaml: threshold, path storage, provider notif.
+# ---------------------------------------------------------------------------
+
+router:
+  # Emosi yang dianggap "urgent" -> perlu perhatian manusia + notifikasi.
+  escalate_label: "anger"
+  # Anger dengan confidence >= ambang ini di-escalate (prioritas tinggi).
+  # Ambang inklusif: confidence == threshold ikut ter-escalate.
+  escalate_min_confidence: 0.75
+  # Emosi negatif yang cukup dibuatkan draft empati (approval biasa).
+  draft_labels: ["anger", "sadness"]
+  # Emosi positif -> tidak ada aksi, cukup di-arsipkan.
+  archive_labels: ["happiness"]
+
+draft:
+  # Berapa review serupa yang di-retrieve untuk grounding draft (anti-halusinasi).
+  top_k: 5
+  # Suhu generation rendah supaya draft konsisten & sopan.
+  temperature: 0.3
+  max_tokens: 400
+
+queue:
+  # SQLite baru khusus antrean tiket agent (pola mirip mlflow.db).
+  db_path: "agent_queue.db"
+
+notifier:
+  # "telegram" jika token+chat_id tersedia, jika tidak fallback ke "file".
+  provider: "telegram"
+  # Fallback log ketika Telegram tidak dikonfigurasi (risiko & mitigasi PLAN).
+  fallback_log_path: "data/monitoring/escalations.log"
