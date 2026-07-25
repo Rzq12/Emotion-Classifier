@@ -77,6 +77,9 @@ class HealthResponse(BaseModel):
     vector_db_connected: bool
     llm_provider: str
     llm_available: bool
+    telegram_configured: bool = Field(
+        False, description="True jika TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID terbaca (bukan nilainya)."
+    )
 
 
 # --- /stats ---------------------------------------------------------------
