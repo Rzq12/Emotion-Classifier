@@ -231,7 +231,9 @@ def client(tmp_path):
     from src.api.main import app
 
     queue = QueueStore(tmp_path / "api_queue.db")
-    notifier = EscalationNotifier(fallback_log_path=tmp_path / "esc.log")
+    # Force empty creds so the notifier always uses the file fallback: tests must
+    # never hit Telegram, even when a real token is present in the environment.
+    notifier = EscalationNotifier(bot_token="", chat_id="", fallback_log_path=tmp_path / "esc.log")
     runtime = AgentRuntime(_deps(FakeClassifier("anger", 0.95)), AgentConfig())
 
     app.dependency_overrides[get_agent_runtime] = lambda: runtime
