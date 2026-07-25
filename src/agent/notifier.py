@@ -62,6 +62,18 @@ class EscalationNotifier:
         return "file"
 
     def _send_telegram(self, message: str) -> bool:
+        ok, detail = self._try_send(message)
+        if not ok:
+            logger.warning("Telegram notify failed, falling back to file: %s", detail)
+        return ok
+
+    def _try_send(self, message: str) -> tuple[bool, str]:
+        """Attempt one Telegram send; return ``(ok, detail)`` without raising.
+
+        ``detail`` carries the Telegram API error body (e.g. "Unauthorized",
+        "chat not found") on HTTP errors, or the OS/URL error otherwise — the
+        exact reason a caller needs to debug delivery.
+        """
         url = _TELEGRAM_API.format(token=self.bot_token)
         payload = json.dumps({"chat_id": self.chat_id, "text": message}).encode("utf-8")
         request = urllib.request.Request(
@@ -69,10 +81,38 @@ class EscalationNotifier:
         )
         try:
             with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS) as resp:
-                return 200 <= resp.status < 300
+                if 200 <= resp.status < 300:
+                    return True, "ok"
+                return False, f"HTTP {resp.status}"
+        except urllib.error.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", "ignore")[:200]
+            except Exception:  # noqa: BLE001 - best-effort read of error body
+                pass
+            return False, self._redact(f"HTTP {exc.code} {exc.reason}: {body}".strip())
         except (urllib.error.URLError, OSError) as exc:
-            logger.warning("Telegram notify failed, falling back to file: %s", exc)
-            return False
+            return False, self._redact(f"{type(exc).__name__}: {exc}")
+
+    def _redact(self, text: str) -> str:
+        """Never let the bot token leak into a returned/logged detail string."""
+        return text.replace(self.bot_token, "***") if self.bot_token else text
+
+    def diagnose(self, message: str = "🔧 Test notifikasi dari /agent/notify-test") -> dict:
+        """Try a real Telegram send and report the outcome (for debugging).
+
+        Returns ``{telegram_configured, attempted, ok, detail}``. ``detail`` is
+        the redacted Telegram/OS error — never the token. Never raises.
+        """
+        if not self.telegram_configured:
+            return {
+                "telegram_configured": False,
+                "attempted": False,
+                "ok": False,
+                "detail": "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID kosong atau tidak terbaca.",
+            }
+        ok, detail = self._try_send(message)
+        return {"telegram_configured": True, "attempted": True, "ok": ok, "detail": detail}
 
     def _append_log(self, message: str) -> None:
         # Collapse the multi-line Telegram message into one record per line.
