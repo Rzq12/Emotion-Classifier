@@ -16,6 +16,30 @@ export const TABS = [
   { id: "classify", label: "Coba Klasifikasi" },
   { id: "insight", label: "Insight" },
   { id: "chat", label: "Tanya Data" },
+  { id: "agent", label: "Agent Queue" },
+];
+
+// Router branch semantics for the agent queue (color always paired with label).
+export const BRANCHES = {
+  escalate: { label: "Eskalasi", color: "#bf3b30" },
+  draft: { label: "Draft", color: "#3f6694" },
+  archive: { label: "Arsip", color: "#6c6a63" },
+};
+
+export function branchMeta(key) {
+  return BRANCHES[key] || { label: key, color: "#6c6a63" };
+}
+
+export const STATUS_LABELS = {
+  pending: "Menunggu",
+  approved: "Disetujui",
+  rejected: "Ditolak",
+};
+
+export const AGENT_EXAMPLES = [
+  "Aplikasi selalu error saat mau bayar, uang saya sudah kepotong tapi pesanan gagal!",
+  "Terima kasih, dokternya ramah dan konsultasinya sangat membantu.",
+  "Sudah seminggu tiket saya belum direspons, kecewa dengan layanannya.",
 ];
 
 export const CLASSIFY_EXAMPLES = [

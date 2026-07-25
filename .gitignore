@@ -77,6 +77,9 @@ mlflow.db
 .dvc/cache/
 chroma_db/
 *.sqlite3
+*.db
+# Antrean tiket agent (Fase 6) — dibuat runtime, jangan commit.
+agent_queue.db
 prediction_logs*.jsonl
 data/monitoring/
 

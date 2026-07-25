@@ -6,6 +6,11 @@ from functools import lru_cache
 
 import yaml
 
+from src.agent.config import AgentConfig
+from src.agent.graph import AgentRuntime
+from src.agent.nodes import AgentDeps
+from src.agent.notifier import EscalationNotifier
+from src.agent.queue_store import QueueStore
 from src.api.classifier import EmotionClassifier
 from src.api.config import get_settings
 from src.llm.base import LLMClient
@@ -93,3 +98,34 @@ def get_chat_responder() -> ChatResponder:
         cache_max_size=cc.get("cache_max_size", 256),
     )
     return ChatResponder(get_retriever(), get_llm(), config)
+
+
+# --- Agentic layer (Fase 6) -----------------------------------------------
+
+
+@lru_cache
+def get_agent_config() -> AgentConfig:
+    return AgentConfig.load(get_settings().agent_config)
+
+
+@lru_cache
+def get_queue_store() -> QueueStore:
+    return QueueStore(get_settings().agent_queue_db)
+
+
+@lru_cache
+def get_notifier() -> EscalationNotifier:
+    cfg = get_agent_config().notifier
+    return EscalationNotifier(fallback_log_path=cfg.fallback_log_path)
+
+
+@lru_cache
+def get_agent_runtime() -> AgentRuntime:
+    cfg = get_agent_config()
+    deps = AgentDeps(
+        classifier=get_classifier(),
+        retriever=get_retriever(),
+        llm=get_llm(),
+        draft_config=cfg.draft,
+    )
+    return AgentRuntime(deps, cfg)

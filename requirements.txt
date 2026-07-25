@@ -31,6 +31,9 @@ uvicorn[standard]==0.30.1
 pydantic==2.13.4
 slowapi==0.1.10
 
+# --- Agentic layer (Fase 6) ---
+langgraph==0.2.76
+
 # --- Dev & testing ---
 pytest==8.2.0
 ruff==0.4.8

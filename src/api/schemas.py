@@ -86,3 +86,54 @@ class StatsResponse(BaseModel):
     by_emotion: dict[str, int]
     by_split: dict[str, dict[str, int]]
     negative_ratio: float
+
+
+# --- /agent ---------------------------------------------------------------
+
+class AgentRunRequest(BaseModel):
+    review_text: str = Field(
+        ..., min_length=1, max_length=MAX_TEXT_LEN, description="Teks review yang diproses agent."
+    )
+
+
+class TicketResponse(BaseModel):
+    """One ticket in the human-in-the-loop queue."""
+
+    id: str
+    review_text: str
+    label: str = Field(..., description="Emosi: anger | happiness | sadness.")
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    branch: str = Field(..., description="Keputusan router: escalate | draft | archive.")
+    priority: str = Field(..., description="high | normal | none.")
+    draft: str = Field("", description="Draft balasan (kosong untuk branch archive).")
+    grounding_ids: list[str] = Field(
+        default_factory=list, description="ID review yang jadi grounding draft."
+    )
+    status: str = Field(..., description="pending | approved | rejected.")
+    reason: str = ""
+    created_at: str
+    updated_at: str
+
+
+class AgentRunResponse(BaseModel):
+    ticket: TicketResponse
+    notified: bool = Field(False, description="True jika notifikasi eskalasi terkirim.")
+    notify_channel: str = Field("", description="Kanal notifikasi: telegram | file | ''.")
+
+
+class QueueResponse(BaseModel):
+    tickets: list[TicketResponse] = Field(default_factory=list)
+    count: int = 0
+
+
+class RejectRequest(BaseModel):
+    reason: str = Field("", max_length=MAX_TEXT_LEN, description="Alasan penolakan draft.")
+
+
+class AgentStatsResponse(BaseModel):
+    total: int
+    pending: int
+    approved: int
+    rejected: int
+    escalations: int
+    approval_rate: float = Field(..., ge=0.0, le=1.0)
