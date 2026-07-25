@@ -9,6 +9,7 @@ from src.api.dependencies import (
     get_classifier,
     get_insight_generator,
     get_llm,
+    get_notifier,
     get_prediction_logger,
     get_vector_store,
 )
@@ -68,6 +69,10 @@ class FakePredictionLogger:
         self.records.append({"text": text, "label": label, "confidence": confidence})
 
 
+class FakeNotifier:
+    telegram_configured = True
+
+
 @pytest.fixture()
 def prediction_logger():
     return FakePredictionLogger()
@@ -86,6 +91,7 @@ def client(prediction_logger, fake_chat):
     app.dependency_overrides[get_insight_generator] = lambda: FakeInsight()
     app.dependency_overrides[get_chat_responder] = lambda: fake_chat
     app.dependency_overrides[get_prediction_logger] = lambda: prediction_logger
+    app.dependency_overrides[get_notifier] = lambda: FakeNotifier()
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -98,6 +104,7 @@ def test_health(client):
     assert body["model_loaded"] is True
     assert body["vector_db_connected"] is True
     assert body["llm_provider"] == "fake"
+    assert body["telegram_configured"] is True
 
 
 def test_classify_ok(client):

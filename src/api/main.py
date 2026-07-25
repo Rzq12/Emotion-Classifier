@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from src.agent.notifier import EscalationNotifier
 from src.api import schemas
 from src.api.agent_routes import router as agent_router
 from src.api.classifier import EmotionClassifier, ModelNotFoundError
@@ -25,6 +26,7 @@ from src.api.dependencies import (
     get_classifier,
     get_insight_generator,
     get_llm,
+    get_notifier,
     get_prediction_logger,
     get_vector_store,
 )
@@ -57,6 +59,7 @@ LLMDep = Annotated[LLMClient, Depends(get_llm)]
 InsightDep = Annotated[InsightGenerator, Depends(get_insight_generator)]
 ChatDep = Annotated[ChatResponder, Depends(get_chat_responder)]
 PredictionLoggerDep = Annotated[PredictionLogger, Depends(get_prediction_logger)]
+NotifierDep = Annotated[EscalationNotifier, Depends(get_notifier)]
 
 
 @app.exception_handler(LLMError)
@@ -68,7 +71,9 @@ async def _llm_error_handler(request: Request, exc: LLMError) -> JSONResponse:
 
 
 @app.get("/health", response_model=schemas.HealthResponse)
-def health(classifier: ClassifierDep, store: StoreDep, llm: LLMDep) -> schemas.HealthResponse:
+def health(
+    classifier: ClassifierDep, store: StoreDep, llm: LLMDep, notifier: NotifierDep
+) -> schemas.HealthResponse:
     try:
         vector_ok = store.count() >= 0
     except Exception:  # noqa: BLE001 - health must never raise
@@ -79,6 +84,7 @@ def health(classifier: ClassifierDep, store: StoreDep, llm: LLMDep) -> schemas.H
         vector_db_connected=vector_ok,
         llm_provider=getattr(llm, "provider", "unknown"),
         llm_available=llm.is_available(),
+        telegram_configured=notifier.telegram_configured,
     )
 
 

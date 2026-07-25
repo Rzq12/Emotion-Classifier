@@ -35,8 +35,14 @@ class EscalationNotifier:
         chat_id: str | None = None,
         fallback_log_path: str | Path = "data/monitoring/escalations.log",
     ) -> None:
-        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")
-        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "")
+        # Only fall back to the environment when an arg is omitted (None). An
+        # explicit "" means "no credential" and must not read env — otherwise a
+        # token in the environment would leak into tests meant to be offline.
+        # ``.strip()`` guards against a trailing space/newline in a pasted secret.
+        raw_token = os.getenv("TELEGRAM_BOT_TOKEN", "") if bot_token is None else bot_token
+        raw_chat = os.getenv("TELEGRAM_CHAT_ID", "") if chat_id is None else chat_id
+        self.bot_token = raw_token.strip()
+        self.chat_id = raw_chat.strip()
         self.fallback_log_path = Path(fallback_log_path)
         self._lock = threading.Lock()
 
