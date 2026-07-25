@@ -119,6 +119,17 @@ def agent_stats(queue: QueueDep) -> schemas.AgentStatsResponse:
     return schemas.AgentStatsResponse(**queue.stats())
 
 
+@router.get("/notify-test", response_model=schemas.NotifyTestResponse, summary="Uji notifikasi")
+def agent_notify_test(notifier: NotifierDep) -> schemas.NotifyTestResponse:
+    """Send a test Telegram message and surface the exact delivery outcome.
+
+    Debug aid: returns whether the token is read, whether a send was attempted,
+    success, and the redacted error reason — so delivery can be diagnosed
+    without container logs.
+    """
+    return schemas.NotifyTestResponse(**notifier.diagnose())
+
+
 def _resolve_ticket(action) -> Ticket:
     """Run a queue transition, mapping domain errors to HTTP status codes."""
     try:
