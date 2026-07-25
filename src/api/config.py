@@ -25,6 +25,8 @@ class Settings:
     prediction_log_path: str = os.getenv(
         "PREDICTION_LOG_PATH", "data/monitoring/predictions.jsonl"
     )
+    agent_config: str = os.getenv("AGENT_CONFIG", "configs/agent.yaml")
+    agent_queue_db: str = os.getenv("AGENT_QUEUE_DB", "agent_queue.db")
 
 
 def get_settings() -> Settings:
