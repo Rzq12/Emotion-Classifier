@@ -9,6 +9,7 @@ MAX_TEXT_LEN = 2000
 
 # --- /classify ------------------------------------------------------------
 
+
 class ClassifyRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=MAX_TEXT_LEN, description="Teks review.")
 
@@ -19,6 +20,7 @@ class ClassifyResponse(BaseModel):
 
 
 # --- /insight -------------------------------------------------------------
+
 
 class InsightRequest(BaseModel):
     query: str = Field(
@@ -48,6 +50,7 @@ class InsightResponse(BaseModel):
 
 # --- /chat ----------------------------------------------------------------
 
+
 class ChatMessage(BaseModel):
     role: str = Field(..., pattern="^(user|bot|assistant)$")
     content: str = Field(..., min_length=1, max_length=MAX_TEXT_LEN)
@@ -71,6 +74,7 @@ class ChatResponse(BaseModel):
 
 # --- /health --------------------------------------------------------------
 
+
 class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
@@ -78,11 +82,13 @@ class HealthResponse(BaseModel):
     llm_provider: str
     llm_available: bool
     telegram_configured: bool = Field(
-        False, description="True jika TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID terbaca (bukan nilainya)."
+        False,
+        description="True jika TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID terbaca (bukan nilainya).",
     )
 
 
 # --- /stats ---------------------------------------------------------------
+
 
 class StatsResponse(BaseModel):
     total: int
@@ -92,6 +98,7 @@ class StatsResponse(BaseModel):
 
 
 # --- /agent ---------------------------------------------------------------
+
 
 class AgentRunRequest(BaseModel):
     review_text: str = Field(
@@ -140,3 +147,12 @@ class AgentStatsResponse(BaseModel):
     rejected: int
     escalations: int
     approval_rate: float = Field(..., ge=0.0, le=1.0)
+
+
+class NotifyTestResponse(BaseModel):
+    """Result of a Telegram delivery self-test (never leaks the token)."""
+
+    telegram_configured: bool
+    attempted: bool = Field(..., description="True jika sempat mencoba kirim ke Telegram.")
+    ok: bool = Field(..., description="True jika Telegram membalas sukses.")
+    detail: str = Field("", description="Alasan error Telegram/OS (ter-redaksi), kosong jika ok.")

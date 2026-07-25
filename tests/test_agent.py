@@ -222,6 +222,44 @@ def test_notifier_telegram_configured_flag():
     assert EscalationNotifier(bot_token="", chat_id="c").telegram_configured is False
 
 
+def test_notifier_strips_whitespace_from_creds():
+    # A pasted secret with a trailing newline must not break the send URL.
+    n = EscalationNotifier(bot_token="  123:abc\n", chat_id=" 42 \n")
+    assert n.bot_token == "123:abc"
+    assert n.chat_id == "42"
+
+
+def test_diagnose_not_configured():
+    result = EscalationNotifier(bot_token="", chat_id="").diagnose()
+    assert result == {
+        "telegram_configured": False,
+        "attempted": False,
+        "ok": False,
+        "detail": "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID kosong atau tidak terbaca.",
+    }
+
+
+def test_notifier_redacts_token():
+    # The bot token must never appear in a returned/logged error string.
+    n = EscalationNotifier(bot_token="secret-token", chat_id="42")
+    redacted = n._redact("error mentions secret-token here")
+    assert "secret-token" not in redacted
+    assert "***" in redacted
+
+
+def test_diagnose_surfaces_try_send_result(monkeypatch):
+    n = EscalationNotifier(bot_token="t", chat_id="42")
+    # No real network: stub the send with a representative Telegram failure.
+    monkeypatch.setattr(n, "_try_send", lambda msg: (False, "HTTP 401 Unauthorized: Unauthorized"))
+    result = n.diagnose()
+    assert result == {
+        "telegram_configured": True,
+        "attempted": True,
+        "ok": False,
+        "detail": "HTTP 401 Unauthorized: Unauthorized",
+    }
+
+
 # --- API ------------------------------------------------------------------
 
 
@@ -295,3 +333,13 @@ def test_agent_stats_endpoint(client):
     assert r.status_code == 200
     assert r.json()["total"] == 1
     assert r.json()["escalations"] == 1
+
+
+def test_agent_notify_test_not_configured(client):
+    # The client's notifier has empty creds -> reports not configured, no network.
+    r = client.get("/agent/notify-test")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["telegram_configured"] is False
+    assert body["attempted"] is False
+    assert body["ok"] is False
