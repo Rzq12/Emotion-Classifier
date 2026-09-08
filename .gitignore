@@ -6,7 +6,7 @@
 !reports/*.md
 .agents/
 skills-lock.json
-
+graphify-out
 
 # ---------------------------------------------------------------------------
 # Secrets & environment

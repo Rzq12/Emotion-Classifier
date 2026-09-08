@@ -47,7 +47,7 @@ class GroqClient(LLMClient):
 
     def __init__(self, api_key: str | None = None, model: str | None = None):
         self._api_keys = _load_api_keys(api_key)
-        self.model = model or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        self.model = model or os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
         self._key_index = 0
         self._client = None
         self._client_index: int | None = None
