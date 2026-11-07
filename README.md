@@ -281,3 +281,5 @@ README ini, jadi Space langsung terkonfigurasi saat sync.
 Emotion classification 3-kelas (`anger`, `happiness`, `sadness`) dari review
 aplikasi Indonesia. Dataset imbalanced (kelas `anger` minoritas); penanganannya
 memakai class weighting dan evaluasi berbasis F1-macro.
+
+Redeploy 1 - 07/11/2026
