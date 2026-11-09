@@ -7,6 +7,8 @@
 pandas==2.2.0
 numpy==1.26.4
 scikit-learn==1.4.0
+# Pinned explicitly: an unpinned scipy got upgraded to a numpy-2-only build.
+scipy==1.13.1
 PyYAML==6.0.1
 
 # --- Modeling & training (Fase 2) ---
@@ -36,5 +38,6 @@ langgraph==0.2.76
 
 # --- Dev & testing ---
 pytest==8.2.0
+pytest-cov==7.1.0
 ruff==0.4.8
 black==24.4.2

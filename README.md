@@ -18,6 +18,46 @@ Klasifikasi emotion 3-kelas — `anger`, `happiness`, `sadness` (tanpa kelas net
 dipadukan dengan retrieval-augmented generation untuk merangkum keluhan pengguna
 dan menjawab pertanyaan tim produk berbasis data review nyata.
 
+## Demo live
+
+- **API (Swagger / OpenAPI):** [https://riezqidr-indo-emotion-classifier.hf.space/docs](https://riezqidr-indo-emotion-classifier.hf.space/docs)
+- **Health check:** [https://riezqidr-indo-emotion-classifier.hf.space/health](https://riezqidr-indo-emotion-classifier.hf.space/health)
+- **Hugging Face Space:** [riezqidr/indo-emotion-classifier](https://huggingface.co/spaces/riezqidr/indo-emotion-classifier)
+
+> Space gratis bisa *sleep*; request pertama setelah idle butuh ±30–60 detik (cold start).
+
+## Arsitektur
+
+```mermaid
+flowchart LR
+    U[Web React<br/>Vercel] -->|HTTPS| API[FastAPI<br/>HF Spaces]
+    API --> CLF[IndoBERT<br/>emotion classifier]
+    API --> RAG[Hybrid retrieval<br/>ChromaDB + BM25]
+    RAG --> LLM[LLM client<br/>Groq / Gemini / Ollama]
+    API --> AG[Agent LangGraph]
+    AG --> CLF
+    AG --> RAG
+    AG --> Q[(SQLite<br/>ticket queue)]
+    AG --> TG[Telegram<br/>escalation]
+    API --> LOG[(Prediction log<br/>JSONL)] --> DRIFT[PSI drift check]
+    TRAIN[Training scripts] --> MLF[(MLflow<br/>tracking + registry)] --> HUB[HF Hub model]
+    HUB --> CLF
+```
+
+## Hasil
+
+| Area | Metrik | Hasil | Detail |
+| --- | --- | --- | --- |
+| Classifier — baseline TF-IDF + LogReg | F1-macro (test) | **0.752** | `EXPERIMENTS.md` Fase 2 |
+| Classifier — IndoBERT fine-tuned (di-serve) | F1-macro (test) | 0.726 | kalah tipis dari baseline di kelas `anger` |
+| RAG retrieval (golden set) | hit@1 / MRR | 1.0 / 1.0 | [`reports/rag_eval_report.md`](reports/rag_eval_report.md) |
+| RAG chat end-to-end | groundedness (LLM-as-judge) | 4.80 / 5 | idem |
+| Agent routing (n=548) | akurasi cabang / escalation precision | 0.827 / 0.837 | [`reports/agent_eval_report.md`](reports/agent_eval_report.md) |
+| Agent routing | escalation recall | 0.406 | bottleneck: classifier mengira `anger` sebagai `sadness` |
+
+Temuan bahwa baseline klasik mengungguli IndoBERT dan bahwa recall eskalasi
+dibatasi classifier (bukan threshold router) dibahas di `EXPERIMENTS.md`.
+
 ## Fitur
 
 - **Classifier:** klasifikasi emosi review (IndoBERT fine-tuned) dengan baseline
@@ -63,7 +103,7 @@ dan menjawab pertanyaan tim produk berbasis data review nyata.
 │   ├── agent/          # agentic layer LangGraph (state, router, nodes, graph, queue)
 │   ├── api/            # FastAPI app (Fase 4) + endpoint /agent (Fase 6)
 │   └── monitoring/     # logging prediksi + drift check (PSI)
-├── reports/            # contoh drift report
+├── reports/            # drift, RAG eval, dan agent routing eval report
 ├── tests/              # unit test
 └── web/                # frontend React (Vite + Tailwind)
 ```
@@ -170,14 +210,41 @@ START → classify → route_by_emotion ─┬─ escalate  (anger, confidence t
 | ------ | ---------------------- | --------------------------------------------------- |
 | POST   | `/agent/run`           | `{review_text}` → jalankan graph, simpan tiket (rate-limited) |
 | GET    | `/agent/queue`         | List tiket (filter `?status=pending\|approved\|rejected`)     |
-| POST   | `/agent/approve/{id}`  | Setujui draft → kirim notifikasi                    |
-| POST   | `/agent/reject/{id}`   | `{reason}` → tolak draft, catat alasan              |
+| POST   | `/agent/approve/{id}`  | 🔒 Setujui draft → kirim notifikasi                 |
+| POST   | `/agent/reject/{id}`   | 🔒 `{reason}` → tolak draft, catat alasan           |
 | GET    | `/agent/stats`         | Metrik antrean (escalation count, approval rate)    |
+| GET    | `/agent/notify-test`   | 🔒 Kirim pesan uji Telegram + diagnosis pengiriman  |
+
+🔒 = aksi reviewer, wajib header `X-API-Key` yang cocok dengan env `AGENT_API_KEY`.
+Sifatnya *fail-closed*: jika `AGENT_API_KEY` kosong, endpoint itu mengembalikan
+503 (bukan terbuka untuk publik). Endpoint lain tetap publik untuk demo;
+`/agent/run` dibatasi rate limit karena memanggil LLM. Di tab **Agent Queue**,
+reviewer memasukkan key di kolom "API key reviewer" (disimpan per tab saja).
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"   # buat AGENT_API_KEY
+```
 
 Konfigurasi via `configs/agent.yaml` (threshold router, `top_k` grounding, path
 queue) dan env (`AGENT_CONFIG`, `AGENT_QUEUE_DB`, `TELEGRAM_*`). LangGraph
 opsional saat runtime: jika paket tak tersedia, agent otomatis fallback ke
 eksekutor sekuensial ekuivalen (graceful degradation).
+
+**Evaluasi routing** (offline, tanpa LLM — gratis & reproducible):
+
+```bash
+python -m src.agent.evaluate_agent --config configs/agent.yaml
+```
+
+Mengklasifikasi seluruh test set dengan IndoBERT asli, me-route dengan threshold
+dari config, lalu membandingkan dengan cabang untuk label manusia: akurasi
+cabang, precision/recall eskalasi, *missed-negative rate* (review negatif yang
+terarsip), sweep threshold, dan latency. Output: `reports/agent_eval_report.md`.
+
+**Keterbatasan yang disengaja:** antrean tiket memakai SQLite lokal. Di HF
+Spaces free tier disk container tidak persisten, sehingga tiket hilang saat
+Space restart/redeploy. Untuk demo ini cukup; untuk produksi pindahkan
+`AGENT_QUEUE_DB` ke persistent storage (HF Spaces `/data`) atau Postgres.
 
 ## Frontend (web/)
 
@@ -213,9 +280,9 @@ plus porsi prediksi low-confidence. Report markdown ditulis ke
 ## Testing & Linting
 
 ```bash
-pytest -q
+pytest -q --cov=src          # 150+ test, semua dependency eksternal (LLM, Telegram) di-mock
 ruff check src tests
-cd web && npm run build
+cd web && npm run lint && npm run build
 ```
 
 ## Deployment
@@ -242,6 +309,8 @@ python -m scripts.push_model_to_hub --repo <username>/indo-emotion-indobert
    - `LLM_PROVIDER` = `groq` (atau `gemini`)
    - `GROQ_API_KEY` / `GEMINI_API_KEY`
    - `CORS_ALLOW_ORIGINS` = URL Vercel (mis. `https://namaapp.vercel.app`)
+   - `AGENT_API_KEY` = key reviewer (tanpa ini approve/reject mengembalikan 503)
+   - `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` (opsional, notifikasi eskalasi)
 5. Tunggu build selesai, verifikasi `https://<space>.hf.space/health`.
 
 ### 3. Web → Vercel
@@ -252,10 +321,12 @@ python -m scripts.push_model_to_hub --repo <username>/indo-emotion-indobert
 
 ### 4. CI & otomasi HF Spaces
 
-- `.github/workflows/ci.yml` — lint + test backend dan build frontend di setiap
-  push/PR ke `main`.
-- `.github/workflows/sync-to-hf.yml` — auto force-push `main` ke repo Space
-  setiap push ke `main` (bisa juga manual via Actions tab).
+- `.github/workflows/ci.yml` — lint (ruff) + test backend dengan coverage gate
+  (≥65%), lint + build frontend, di setiap push ke branch mana pun dan PR ke
+  `main`/`dev`.
+- `.github/workflows/sync-to-hf.yml` — deploy ke Space **hanya setelah CI hijau**
+  di `main` (`workflow_run`), mem-push commit persis yang sudah dites. Bisa juga
+  manual via Actions tab.
 - `.github/workflows/keep-alive.yml` — ping Space tiap 6 jam agar tidak sleep
   (free tier HF Spaces tidur setelah ~48 jam tanpa traffic).
 
@@ -265,8 +336,7 @@ Actions**):
 | Secret          | Isi                                                                                |
 | --------------- | ---------------------------------------------------------------------------------- |
 | `HF_TOKEN`      | Token HF dengan akses write (https://huggingface.co/settings/tokens)               |
-| `HF_SPACE_REPO` | Repo Space, mis. `riezqidr/indo-review-intelligence`                               |
-| `HF_SPACE_URL`  | URL health Space, mis. `https://riezqidr-indo-review-intelligence.hf.space/health` |
+| `HF_SPACE_URL`  | URL health Space, mis. `https://riezqidr-indo-emotion-classifier.hf.space/health`  |
 
 > Catatan: workflow `schedule` (keep-alive) hanya berjalan dari branch default
 > (`main`) — pastikan workflow sudah ter-merge ke `main` di GitHub.
@@ -282,4 +352,10 @@ Emotion classification 3-kelas (`anger`, `happiness`, `sadness`) dari review
 aplikasi Indonesia. Dataset imbalanced (kelas `anger` minoritas); penanganannya
 memakai class weighting dan evaluasi berbasis F1-macro.
 
-Redeploy 1 - 07/11/2026
+Ukuran CSV mentah ±300 KB, jadi saat ini di-track langsung di git (bukan DVC);
+alasannya dicatat di `EXPERIMENTS.md`.
+
+## Lisensi
+
+Kode dirilis di bawah [MIT License](LICENSE). Dataset review mengikuti ketentuan
+sumber aslinya dan tidak termasuk dalam lisensi ini.

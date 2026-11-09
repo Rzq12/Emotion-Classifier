@@ -266,7 +266,9 @@ def test_diagnose_surfaces_try_send_result(monkeypatch):
 @pytest.fixture()
 def client(tmp_path):
     from src.api.dependencies import get_agent_runtime, get_notifier, get_queue_store
+    from src.api.limiter import limiter
     from src.api.main import app
+    from src.api.security import get_reviewer_key
 
     queue = QueueStore(tmp_path / "api_queue.db")
     # Force empty creds so the notifier always uses the file fallback: tests must
@@ -277,8 +279,15 @@ def client(tmp_path):
     app.dependency_overrides[get_agent_runtime] = lambda: runtime
     app.dependency_overrides[get_queue_store] = lambda: queue
     app.dependency_overrides[get_notifier] = lambda: notifier
+    app.dependency_overrides[get_reviewer_key] = lambda: REVIEWER_KEY
+    # Each test starts with a fresh rate-limit window (shared in-memory limiter).
+    limiter.reset()
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+REVIEWER_KEY = "test-reviewer-key"
+AUTH = {"X-API-Key": REVIEWER_KEY}
 
 
 def test_agent_run_escalates_and_notifies(client):
@@ -308,23 +317,23 @@ def test_agent_queue_bad_status_422(client):
 
 def test_agent_approve_flow(client):
     tid = client.post("/agent/run", json={"review_text": "error terus"}).json()["ticket"]["id"]
-    r = client.post(f"/agent/approve/{tid}")
+    r = client.post(f"/agent/approve/{tid}", headers=AUTH)
     assert r.status_code == 200
     assert r.json()["ticket"]["status"] == "approved"
     # Re-approving a resolved ticket is a conflict.
-    assert client.post(f"/agent/approve/{tid}").status_code == 409
+    assert client.post(f"/agent/approve/{tid}", headers=AUTH).status_code == 409
 
 
 def test_agent_reject_flow(client):
     tid = client.post("/agent/run", json={"review_text": "error terus"}).json()["ticket"]["id"]
-    r = client.post(f"/agent/reject/{tid}", json={"reason": "nada kaku"})
+    r = client.post(f"/agent/reject/{tid}", json={"reason": "nada kaku"}, headers=AUTH)
     assert r.status_code == 200
     assert r.json()["ticket"]["status"] == "rejected"
     assert r.json()["ticket"]["reason"] == "nada kaku"
 
 
 def test_agent_approve_missing_404(client):
-    assert client.post("/agent/approve/nope").status_code == 404
+    assert client.post("/agent/approve/nope", headers=AUTH).status_code == 404
 
 
 def test_agent_stats_endpoint(client):
@@ -337,9 +346,54 @@ def test_agent_stats_endpoint(client):
 
 def test_agent_notify_test_not_configured(client):
     # The client's notifier has empty creds -> reports not configured, no network.
-    r = client.get("/agent/notify-test")
+    r = client.get("/agent/notify-test", headers=AUTH)
     assert r.status_code == 200
     body = r.json()
     assert body["telegram_configured"] is False
     assert body["attempted"] is False
     assert body["ok"] is False
+
+
+# --- Reviewer auth ----------------------------------------------------------
+
+
+def _new_ticket(client) -> str:
+    return client.post("/agent/run", json={"review_text": "error terus"}).json()["ticket"]["id"]
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "json"),
+    [
+        ("post", "/agent/approve/{tid}", None),
+        ("post", "/agent/reject/{tid}", {"reason": "x"}),
+        ("get", "/agent/notify-test", None),
+    ],
+)
+def test_reviewer_endpoints_missing_key_returns_401(client, method, path, json):
+    tid = _new_ticket(client)
+    r = getattr(client, method)(path.format(tid=tid), **({"json": json} if json else {}))
+    assert r.status_code == 401
+
+
+def test_reviewer_endpoint_wrong_key_returns_401(client):
+    tid = _new_ticket(client)
+    r = client.post(f"/agent/approve/{tid}", headers={"X-API-Key": "wrong"})
+    assert r.status_code == 401
+    # The ticket must stay untouched after a rejected auth attempt.
+    assert client.get("/agent/queue?status=pending").json()["count"] == 1
+
+
+def test_reviewer_endpoint_unconfigured_key_returns_503(client):
+    from src.api.main import app
+    from src.api.security import get_reviewer_key
+
+    app.dependency_overrides[get_reviewer_key] = lambda: ""
+    tid = _new_ticket(client)
+    r = client.post(f"/agent/approve/{tid}", headers={"X-API-Key": ""})
+    assert r.status_code == 503
+
+
+def test_public_agent_endpoints_need_no_key(client):
+    assert client.post("/agent/run", json={"review_text": "error terus"}).status_code == 200
+    assert client.get("/agent/queue").status_code == 200
+    assert client.get("/agent/stats").status_code == 200

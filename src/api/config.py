@@ -27,6 +27,8 @@ class Settings:
     )
     agent_config: str = os.getenv("AGENT_CONFIG", "configs/agent.yaml")
     agent_queue_db: str = os.getenv("AGENT_QUEUE_DB", "agent_queue.db")
+    # Required by approve/reject/notify-test (X-API-Key). Empty = those endpoints off.
+    agent_api_key: str = os.getenv("AGENT_API_KEY", "").strip()
 
 
 def get_settings() -> Settings:

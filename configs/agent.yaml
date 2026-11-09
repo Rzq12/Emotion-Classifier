@@ -30,3 +30,11 @@ notifier:
   provider: "telegram"
   # Fallback log ketika Telegram tidak dikonfigurasi (risiko & mitigasi PLAN).
   fallback_log_path: "data/monitoring/escalations.log"
+
+evaluation:
+  # Offline evaluation of routing decisions (src/agent/evaluate_agent.py).
+  # Labeled test split -> classifier -> router, compared with gold-label routing.
+  test_csv: "data/processed/test.csv"
+  # Values of escalate_min_confidence to compare (precision vs recall trade-off).
+  threshold_sweep: [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+  report_path: "reports/agent_eval_report.md"

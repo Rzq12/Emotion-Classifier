@@ -2,7 +2,8 @@
 
 Grouped under an ``APIRouter`` (prefix ``/agent``) rather than inflating
 ``main``. ``/agent/run`` calls the LLM so it is rate limited like the other
-LLM endpoints; the queue/approve/reject endpoints are cheap DB operations.
+LLM endpoints. Reviewer actions (approve/reject/notify-test) change state or
+send real notifications, so they require ``X-API-Key`` (see ``security``).
 
 This module intentionally avoids ``from __future__ import annotations`` so
 FastAPI can resolve body/dependency types through the slowapi wrapper (same
@@ -25,12 +26,15 @@ from src.agent.queue_store import (
 from src.api import schemas
 from src.api.dependencies import get_agent_runtime, get_notifier, get_queue_store
 from src.api.limiter import RATE, limiter
+from src.api.security import require_reviewer
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 RuntimeDep = Annotated[AgentRuntime, Depends(get_agent_runtime)]
 QueueDep = Annotated[QueueStore, Depends(get_queue_store)]
 NotifierDep = Annotated[EscalationNotifier, Depends(get_notifier)]
+#: Applied to every endpoint that acts on behalf of a human reviewer.
+REVIEWER_ONLY = [Depends(require_reviewer)]
 
 
 def _to_response(ticket: Ticket) -> schemas.TicketResponse:
@@ -88,7 +92,10 @@ def agent_queue(
 
 
 @router.post(
-    "/approve/{ticket_id}", response_model=schemas.AgentRunResponse, summary="Setujui draft"
+    "/approve/{ticket_id}",
+    response_model=schemas.AgentRunResponse,
+    summary="Setujui draft (butuh X-API-Key)",
+    dependencies=REVIEWER_ONLY,
 )
 def agent_approve(
     ticket_id: str, queue: QueueDep, notifier: NotifierDep
@@ -104,7 +111,12 @@ def agent_approve(
     )
 
 
-@router.post("/reject/{ticket_id}", response_model=schemas.AgentRunResponse, summary="Tolak draft")
+@router.post(
+    "/reject/{ticket_id}",
+    response_model=schemas.AgentRunResponse,
+    summary="Tolak draft (butuh X-API-Key)",
+    dependencies=REVIEWER_ONLY,
+)
 def agent_reject(
     ticket_id: str, body: schemas.RejectRequest, queue: QueueDep
 ) -> schemas.AgentRunResponse:
@@ -119,7 +131,12 @@ def agent_stats(queue: QueueDep) -> schemas.AgentStatsResponse:
     return schemas.AgentStatsResponse(**queue.stats())
 
 
-@router.get("/notify-test", response_model=schemas.NotifyTestResponse, summary="Uji notifikasi")
+@router.get(
+    "/notify-test",
+    response_model=schemas.NotifyTestResponse,
+    summary="Uji notifikasi (butuh X-API-Key)",
+    dependencies=REVIEWER_ONLY,
+)
 def agent_notify_test(notifier: NotifierDep) -> schemas.NotifyTestResponse:
     """Send a test Telegram message and surface the exact delivery outcome.
 

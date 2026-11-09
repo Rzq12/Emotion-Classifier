@@ -117,12 +117,63 @@ function TicketCard({ ticket, onApprove, onReject, busy }) {
   );
 }
 
+const KEY_STORAGE = "irv-reviewer-key";
+
+// sessionStorage can throw (private mode, blocked storage): the key is a
+// per-tab convenience, so failures just mean the reviewer re-enters it.
+function readStoredKey() {
+  try {
+    return window.sessionStorage.getItem(KEY_STORAGE) || "";
+  } catch {
+    return "";
+  }
+}
+
+function storeKey(value) {
+  try {
+    if (value) window.sessionStorage.setItem(KEY_STORAGE, value);
+    else window.sessionStorage.removeItem(KEY_STORAGE);
+  } catch {
+    /* ignore */
+  }
+}
+
+function ReviewerKey({ value, onChange }) {
+  return (
+    <div className="rounded-lg border border-line bg-surface p-4">
+      <label htmlFor="reviewer-key" className="block text-xs font-medium text-muted">
+        API key reviewer
+      </label>
+      <input
+        id="reviewer-key"
+        type="password"
+        autoComplete="off"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Diperlukan untuk Setujui / Tolak"
+        className="mt-1.5 w-full rounded-md border border-line bg-paper/60 px-3 py-2 font-mono text-sm text-ink placeholder:text-faint focus:border-ink sm:max-w-sm"
+      />
+      <p className="mt-1.5 text-xs text-faint">
+        Menjalankan agent dan melihat antrean terbuka untuk publik. Menyetujui atau menolak draft
+        hanya untuk reviewer. Key disimpan di tab ini saja.
+      </p>
+    </div>
+  );
+}
+
 export function AgentQueue() {
   const [filter, setFilter] = useState("");
   const [tickets, setTickets] = useState(null);
   const [stats, setStats] = useState(null);
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [actionError, setActionError] = useState(null);
+  const [reviewerKey, setReviewerKey] = useState(readStoredKey);
+
+  const updateKey = (value) => {
+    setReviewerKey(value);
+    storeKey(value);
+  };
 
   const [review, setReview] = useState("");
   const [running, setRunning] = useState(false);
@@ -157,23 +208,29 @@ export function AgentQueue() {
       .finally(() => setRunning(false));
   };
 
-  const approve = (id) => {
+  const reviewerAction = (id, call) => {
+    if (!reviewerKey.trim()) {
+      setActionError("Isi API key reviewer dulu untuk menyetujui atau menolak draft.");
+      return;
+    }
     setBusyId(id);
-    api
-      .agentApprove(id)
+    setActionError(null);
+    call()
       .then(load)
-      .catch((e) => setError(e.message))
+      .catch((e) => setActionError(e.message))
       .finally(() => setBusyId(null));
   };
 
+  const approve = (id) => reviewerAction(id, () => api.agentApprove(id, reviewerKey.trim()));
+
   const reject = (id) => {
-    const reason = window.prompt("Alasan menolak draft ini? (opsional)") ?? "";
-    setBusyId(id);
-    api
-      .agentReject(id, reason)
-      .then(load)
-      .catch((e) => setError(e.message))
-      .finally(() => setBusyId(null));
+    if (!reviewerKey.trim()) {
+      setActionError("Isi API key reviewer dulu untuk menyetujui atau menolak draft.");
+      return;
+    }
+    const reason = window.prompt("Alasan menolak draft ini? (opsional)");
+    if (reason === null) return; // cancelled
+    reviewerAction(id, () => api.agentReject(id, reason, reviewerKey.trim()));
   };
 
   return (
@@ -228,6 +285,8 @@ export function AgentQueue() {
 
       <StatStrip stats={stats} />
 
+      <ReviewerKey value={reviewerKey} onChange={updateKey} />
+
       <div className="flex items-center justify-between">
         <div className="flex gap-1">
           {FILTERS.map((f) => (
@@ -246,6 +305,12 @@ export function AgentQueue() {
           Muat ulang
         </button>
       </div>
+
+      {actionError && (
+        <p role="alert" className="text-sm text-anger">
+          {actionError}
+        </p>
+      )}
 
       {error && <ErrorState message={error} onRetry={load} />}
 

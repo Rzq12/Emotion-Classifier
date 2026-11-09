@@ -34,6 +34,10 @@ async function request(path, options = {}) {
   return res.json();
 }
 
+function reviewerHeaders(apiKey) {
+  return { "Content-Type": "application/json", "X-API-Key": apiKey || "" };
+}
+
 export const api = {
   health: () => request("/health"),
   stats: () => request("/stats"),
@@ -48,10 +52,16 @@ export const api = {
   agentQueue: (status) =>
     request(`/agent/queue${status ? `?status=${encodeURIComponent(status)}` : ""}`),
   agentStats: () => request("/agent/stats"),
-  agentApprove: (id) => request(`/agent/approve/${encodeURIComponent(id)}`, { method: "POST" }),
-  agentReject: (id, reason = "") =>
+  // Reviewer actions require the X-API-Key header (AGENT_API_KEY on the server).
+  agentApprove: (id, apiKey) =>
+    request(`/agent/approve/${encodeURIComponent(id)}`, {
+      method: "POST",
+      headers: reviewerHeaders(apiKey),
+    }),
+  agentReject: (id, reason = "", apiKey) =>
     request(`/agent/reject/${encodeURIComponent(id)}`, {
       method: "POST",
+      headers: reviewerHeaders(apiKey),
       body: JSON.stringify({ reason }),
     }),
 };

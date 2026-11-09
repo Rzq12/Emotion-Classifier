@@ -1,20 +1,35 @@
 name: Sync to Hugging Face hub
+
+# Deploy only what CI has verified: this runs after the "CI" workflow finishes
+# on main, and pushes exactly the commit CI tested. A red CI run never deploys.
 on:
-  push:
-    branches:
-      - main
-  # to run this workflow manually from the Actions tab
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  # Manual escape hatch (Actions tab). Deploys the current tip of main.
   workflow_dispatch:
+
+concurrency:
+  group: deploy-hf-space
+  cancel-in-progress: false
 
 jobs:
   sync-to-hub:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           lfs: true
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push https://riezqidr:$HF_TOKEN@huggingface.co/spaces/riezqidr/indo-emotion-classifier main:main --force
+        run: >-
+          git push https://riezqidr:$HF_TOKEN@huggingface.co/spaces/riezqidr/indo-emotion-classifier
+          HEAD:refs/heads/main --force
