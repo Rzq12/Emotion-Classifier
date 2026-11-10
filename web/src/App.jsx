@@ -6,6 +6,7 @@ import { Classify } from "./pages/Classify";
 import { Insight } from "./pages/Insight";
 import { Chat } from "./pages/Chat";
 import { AgentQueue } from "./pages/AgentQueue";
+import { Monitoring } from "./pages/Monitoring";
 
 const PAGES = {
   dashboard: Dashboard,
@@ -13,6 +14,7 @@ const PAGES = {
   insight: Insight,
   chat: Chat,
   agent: AgentQueue,
+  monitoring: Monitoring,
 };
 
 export default function App() {

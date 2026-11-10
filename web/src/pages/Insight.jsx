@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import { Spinner, ErrorState, EmptyState } from "../components/States";
+import { ReviewSources } from "../components/ReviewSources";
+
+// Category filter (PRD 6.4): which negative emotion the insight draws from.
+const EMOTION_FILTERS = [
+  { id: "", label: "Semua negatif" },
+  { id: "anger", label: "Marah" },
+  { id: "sadness", label: "Sedih" },
+];
 
 function ThemeCard({ theme }) {
   return (
@@ -11,24 +19,24 @@ function ThemeCard({ theme }) {
           <span className="shrink-0 font-mono text-xs tnum text-faint">{theme.count} review</span>
         )}
       </div>
-      {theme.example_review_ids?.length > 0 && (
-        <p className="mt-1 font-mono text-xs text-faint">
-          sumber: {theme.example_review_ids.join(", ")}
-        </p>
-      )}
+      <ReviewSources
+        ids={theme.example_review_ids}
+        label={`Lihat ${theme.example_review_ids?.length} review contoh`}
+      />
     </div>
   );
 }
 
 export function Insight() {
   const [query, setQuery] = useState("keluhan utama pengguna");
+  const [emotion, setEmotion] = useState("");
   const [state, setState] = useState({ status: "idle", data: null, error: null });
 
   const generate = () => {
     if (!query.trim()) return;
     setState({ status: "loading", data: null, error: null });
     api
-      .insight(query.trim())
+      .insight(query.trim(), emotion ? [emotion] : [])
       .then((data) => setState({ status: "ok", data, error: null }))
       .catch((e) => setState({ status: "error", data: null, error: e.message }));
   };
@@ -63,6 +71,22 @@ export function Insight() {
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter emosi">
+        <span className="mr-2 text-xs text-faint">Emosi:</span>
+        {EMOTION_FILTERS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setEmotion(f.id)}
+            aria-pressed={emotion === f.id}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+              emotion === f.id ? "bg-ink text-paper" : "text-faint hover:text-muted"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {state.status === "idle" && (
         <EmptyState
           title="Belum ada insight"
@@ -80,9 +104,16 @@ export function Insight() {
                 dari cache
               </span>
             )}
+            {data.degraded && (
+              <span className="shrink-0 rounded-full border border-anger/40 px-2 py-0.5 text-xs text-anger">
+                tanpa LLM
+              </span>
+            )}
           </div>
 
-          {hasThemes ? (
+          {data.degraded ? (
+            data.note && <p className="text-xs italic text-faint">{data.note}</p>
+          ) : hasThemes ? (
             <section>
               <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-faint">
                 Tema Keluhan

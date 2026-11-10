@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Annotated, Literal
+
 from pydantic import BaseModel, Field
 
 MAX_TEXT_LEN = 2000
+MAX_BATCH_SIZE = 100
+MAX_LOOKUP_IDS = 50
+
+ReviewText = Annotated[str, Field(min_length=1, max_length=MAX_TEXT_LEN)]
 
 
 # --- /classify ------------------------------------------------------------
@@ -17,6 +23,47 @@ class ClassifyRequest(BaseModel):
 class ClassifyResponse(BaseModel):
     label: str = Field(..., description="Emosi: anger | happiness | sadness.")
     confidence: float = Field(..., ge=0.0, le=1.0)
+    probabilities: dict[str, float] = Field(
+        default_factory=dict, description="Probabilitas tiap kelas emosi."
+    )
+
+
+class ClassifyBatchRequest(BaseModel):
+    texts: list[ReviewText] = Field(
+        ..., min_length=1, max_length=MAX_BATCH_SIZE, description="Daftar teks review."
+    )
+
+
+class ClassifyBatchItem(ClassifyResponse):
+    text: str
+
+
+class ClassifyBatchResponse(BaseModel):
+    results: list[ClassifyBatchItem] = Field(default_factory=list)
+    count: int = 0
+    by_emotion: dict[str, int] = Field(
+        default_factory=dict, description="Jumlah prediksi per emosi dalam batch ini."
+    )
+
+
+# --- /reviews -------------------------------------------------------------
+
+
+class ReviewLookupRequest(BaseModel):
+    ids: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(
+        ..., min_length=1, max_length=MAX_LOOKUP_IDS, description="ID review yang dicari."
+    )
+
+
+class ReviewItem(BaseModel):
+    review_id: str
+    text: str
+    emotion: str
+
+
+class ReviewLookupResponse(BaseModel):
+    reviews: list[ReviewItem] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list, description="ID yang tidak ditemukan.")
 
 
 # --- /insight -------------------------------------------------------------
@@ -30,6 +77,12 @@ class InsightRequest(BaseModel):
         description="Fokus insight (mis. 'masalah pembayaran').",
     )
     use_cache: bool = True
+    emotions: list[Literal["anger", "sadness"]] | None = Field(
+        None,
+        min_length=1,
+        max_length=2,
+        description="Filter kategori emosi negatif. Kosong = semua emosi negatif.",
+    )
 
 
 class Theme(BaseModel):
@@ -46,6 +99,12 @@ class InsightResponse(BaseModel):
     note: str = Field("", description="Disclaimer: statistik dihitung dari sampel retrieval.")
     n_reviews: int = 0
     cached: bool = False
+    emotions: list[str] = Field(
+        default_factory=list, description="Emosi yang dipakai sebagai filter retrieval."
+    )
+    degraded: bool = Field(
+        False, description="True jika LLM gagal dan hasil hanya berisi kutipan retrieval."
+    )
 
 
 # --- /chat ----------------------------------------------------------------
@@ -70,6 +129,9 @@ class ChatResponse(BaseModel):
     answer: str
     sources: list[str] = Field(default_factory=list)
     cached: bool = False
+    degraded: bool = Field(
+        False, description="True jika LLM gagal dan jawaban hanya berisi review relevan."
+    )
 
 
 # --- /health --------------------------------------------------------------
@@ -95,6 +157,37 @@ class StatsResponse(BaseModel):
     by_emotion: dict[str, int]
     by_split: dict[str, dict[str, int]]
     negative_ratio: float
+
+
+# --- /monitoring ----------------------------------------------------------
+
+
+class DailyCount(BaseModel):
+    date: str = Field(..., description="Tanggal UTC (YYYY-MM-DD).")
+    count: int
+
+
+class DriftStatus(BaseModel):
+    status: str = Field(..., description="ok | insufficient_data | no_reference.")
+    min_samples: int
+    label_psi: float | None = None
+    label_verdict: str | None = Field(None, description="STABLE | MODERATE | DRIFT.")
+    length_psi: float | None = None
+    length_verdict: str | None = None
+
+
+class MonitoringSummaryResponse(BaseModel):
+    n_predictions: int
+    label_counts: dict[str, int]
+    label_distribution: dict[str, float]
+    reference_distribution: dict[str, float] = Field(default_factory=dict)
+    mean_confidence: float | None = None
+    low_confidence_share: float | None = None
+    low_confidence_threshold: float
+    daily: list[DailyCount] = Field(default_factory=list)
+    first_timestamp: str | None = None
+    last_timestamp: str | None = None
+    drift: DriftStatus
 
 
 # --- /agent ---------------------------------------------------------------
@@ -138,6 +231,12 @@ class QueueResponse(BaseModel):
 
 class RejectRequest(BaseModel):
     reason: str = Field("", max_length=MAX_TEXT_LEN, description="Alasan penolakan draft.")
+
+
+class EditDraftRequest(BaseModel):
+    draft: str = Field(
+        ..., min_length=1, max_length=MAX_TEXT_LEN, description="Draft balasan hasil edit."
+    )
 
 
 class AgentStatsResponse(BaseModel):

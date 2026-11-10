@@ -22,6 +22,8 @@ from src.rag.retriever import HybridRetriever
 
 NO_CONTEXT_MESSAGE = "Saya tidak menemukan review yang relevan dengan pertanyaan ini."
 NO_HISTORY_TEXT = "(belum ada riwayat)"
+# Verbatim reviews listed when the LLM is unavailable (degraded mode).
+FALLBACK_REVIEWS = 3
 
 # Bound the conversation context passed to the prompt.
 MAX_HISTORY_MESSAGES = 6
@@ -78,12 +80,7 @@ class ChatResponder:
         if key in self._cache:
             return {**self._cache[key], "cached": True}
 
-        reviews = self.retriever.query(question, n_results=self.config.top_k)
-        relevant = [
-            r
-            for r in reviews
-            if r.score >= self.config.min_score or r.bm25_score >= self.config.min_bm25
-        ]
+        relevant = self._relevant(question)
 
         if not relevant:
             return {"answer": NO_CONTEXT_MESSAGE, "sources": [], "cached": False}
@@ -107,6 +104,36 @@ class ChatResponder:
         }
         self._cache[key] = {k: v for k, v in result.items() if k != "cached"}
         return result
+
+    def _relevant(self, question: str) -> list:
+        """Retrieve reviews for ``question`` and keep those passing a relevance gate."""
+        reviews = self.retriever.query(question, n_results=self.config.top_k)
+        return [
+            r
+            for r in reviews
+            if r.score >= self.config.min_score or r.bm25_score >= self.config.min_bm25
+        ]
+
+    def fallback(self, question: str) -> dict:
+        """LLM-free degraded answer: list the most relevant reviews verbatim.
+
+        Used when the LLM call fails. Still grounded (only retrieved reviews are
+        shown) and flagged ``degraded`` so the UI can say no summary was made.
+        Never cached, so the next request retries the LLM.
+        """
+        relevant = self._relevant(question)[:FALLBACK_REVIEWS] if question.strip() else []
+        if not relevant:
+            return {"answer": NO_CONTEXT_MESSAGE, "sources": [], "cached": False, "degraded": True}
+        listed = "\n".join(f"- {r.text} [{r.review_id}]" for r in relevant)
+        return {
+            "answer": (
+                "Layanan LLM sedang tidak tersedia, jadi saya belum bisa merangkum jawaban. "
+                f"Review paling relevan dengan pertanyaan ini:\n{listed}"
+            ),
+            "sources": [r.review_id for r in relevant],
+            "cached": False,
+            "degraded": True,
+        }
 
 
 def _cited_sources(answer: str, relevant: list) -> list[str]:

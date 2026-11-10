@@ -37,7 +37,7 @@ class FakeLLM:
 
 
 class FakeInsight:
-    def generate(self, query: str, use_cache: bool = True) -> dict:
+    def generate(self, query: str, use_cache: bool = True, emotions=None) -> dict:
         return {
             "summary": "Keluhan dominan soal checkout.",
             "themes": [{"theme": "checkout error", "count": 3, "example_review_ids": ["train_1"]}],

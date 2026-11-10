@@ -1,0 +1,86 @@
+name: Weekly Drift Check
+
+# Pulls the live monitoring summary from the deployed API once a week and fails
+# the run when the label or text-length distribution has drifted (PSI >= 0.2).
+# The prediction log lives inside the Space container, so the check goes through
+# GET /monitoring/summary rather than reading the JSONL file directly.
+on:
+  schedule:
+    - cron: "0 2 * * 1" # Mondays 02:00 UTC
+  workflow_dispatch:
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Fetch monitoring summary
+        env:
+          # Base URL of the API Space (same secret keep-alive.yml uses).
+          HF_SPACE_URL: ${{ secrets.HF_SPACE_URL }}
+        run: |
+          if [ -z "$HF_SPACE_URL" ]; then
+            echo "::error::Secret HF_SPACE_URL is not set."
+            exit 1
+          fi
+          curl -sS --fail --max-time 120 --retry 2 \
+            "${HF_SPACE_URL%/}/monitoring/summary" -o summary.json
+
+      - name: Render report and gate on drift
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          with open("summary.json", encoding="utf-8") as f:
+              s = json.load(f)
+          drift = s["drift"]
+
+          lines = [
+              "# Weekly drift check",
+              "",
+              f"- Prediksi tercatat: **{s['n_predictions']}**",
+              f"- Rata-rata confidence: **{s['mean_confidence']}**",
+              f"- Porsi low-confidence: **{s['low_confidence_share']}**",
+              f"- Status drift: **{drift['status']}**",
+              "",
+          ]
+          if drift["status"] == "ok":
+              lines += [
+                  "| Metrik | PSI | Verdict |",
+                  "|---|---|---|",
+                  f"| Distribusi label | {drift['label_psi']} | {drift['label_verdict']} |",
+                  f"| Panjang teks | {drift['length_psi']} | {drift['length_verdict']} |",
+                  "",
+              ]
+          else:
+              lines.append(
+                  f"Verdict tidak dihitung (butuh minimal {drift['min_samples']} prediksi "
+                  "dan data referensi)."
+              )
+
+          lines += ["", "| Emosi | Live | Training |", "|---|---|---|"]
+          reference = s.get("reference_distribution", {})
+          for label, share in s["label_distribution"].items():
+              lines.append(f"| {label} | {share:.2%} | {reference.get(label, 0):.2%} |")
+
+          report = "\n".join(lines) + "\n"
+          print(report)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write(report)
+
+          verdicts = {drift.get("label_verdict"), drift.get("length_verdict")}
+          if "DRIFT" in verdicts:
+              print("::error::Drift signifikan terdeteksi (PSI >= 0.2).")
+              sys.exit(1)
+          PY
+
+      - name: Upload summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-summary
+          path: summary.json
+          if-no-files-found: ignore

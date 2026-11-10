@@ -64,12 +64,9 @@ class EmotionClassifier:
             ) from exc
         self._model.eval()
 
-    def predict(self, text: str) -> dict:
-        """Return ``{label, confidence}`` for a single review."""
-        self._load()
+    def _probabilities(self, cleaned: str | list[str]):
+        """Run the model on cleaned text(s); returns a (batch, n_labels) tensor."""
         torch = self._torch
-
-        cleaned = clean_text(text)
         inputs = self._tokenizer(
             cleaned,
             truncation=True,
@@ -78,8 +75,32 @@ class EmotionClassifier:
             return_tensors="pt",
         )
         with torch.no_grad():
-            logits = self._model(**inputs).logits
-            probs = torch.softmax(logits, dim=-1)[0]
+            return torch.softmax(self._model(**inputs).logits, dim=-1)
 
-        idx = int(torch.argmax(probs).item())
-        return {"label": ID2LABEL[idx], "confidence": round(float(probs[idx].item()), 4)}
+    def _to_result(self, probs) -> dict:
+        """Convert one probability row into ``{label, confidence, probabilities}``."""
+        idx = int(self._torch.argmax(probs).item())
+        return {
+            "label": ID2LABEL[idx],
+            "confidence": round(float(probs[idx].item()), 4),
+            "probabilities": {
+                ID2LABEL[i]: round(float(p), 4) for i, p in enumerate(probs.tolist())
+            },
+        }
+
+    def predict(self, text: str) -> dict:
+        """Return ``{label, confidence, probabilities}`` for a single review."""
+        self._load()
+        return self._to_result(self._probabilities(clean_text(text))[0])
+
+    def predict_batch(self, texts: list[str], batch_size: int = 16) -> list[dict]:
+        """Classify many reviews, running the model in chunks of ``batch_size``.
+
+        Returns one result per input text, in input order.
+        """
+        self._load()
+        results: list[dict] = []
+        for start in range(0, len(texts), batch_size):
+            chunk = [clean_text(t) for t in texts[start : start + batch_size]]
+            results.extend(self._to_result(row) for row in self._probabilities(chunk))
+        return results

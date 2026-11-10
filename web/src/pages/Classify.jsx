@@ -1,13 +1,46 @@
 import { useState } from "react";
 import { api } from "../lib/api";
-import { CLASSIFY_EXAMPLES } from "../lib/constants";
+import { CLASSIFY_EXAMPLES, EMOTION_ORDER, emotionMeta } from "../lib/constants";
 import { EmotionBadge } from "../components/EmotionBadge";
 import { ConfidenceBar } from "../components/ConfidenceBar";
+import { BatchClassify } from "../components/BatchClassify";
 import { Spinner, ErrorState } from "../components/States";
 
 const MAX_LEN = 2000;
 
-export function Classify() {
+const MODES = [
+  { id: "single", label: "Satu review" },
+  { id: "batch", label: "Banyak review (CSV)" },
+];
+
+// All class probabilities, so an ambiguous prediction is visible as ambiguous.
+function Probabilities({ probabilities }) {
+  if (!probabilities || Object.keys(probabilities).length === 0) return null;
+  return (
+    <div className="mt-6 border-t border-line pt-5">
+      <p className="mb-3 text-xs uppercase tracking-wide text-faint">Probabilitas tiap emosi</p>
+      <div className="space-y-2.5">
+        {EMOTION_ORDER.map((k) => {
+          const pct = Math.round((probabilities[k] || 0) * 100);
+          return (
+            <div key={k} className="flex items-center gap-3">
+              <span className="w-16 shrink-0 text-xs text-muted">{emotionMeta(k).label}</span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${pct}%`, backgroundColor: emotionMeta(k).color }}
+                />
+              </div>
+              <span className="w-10 shrink-0 text-right font-mono text-xs tnum text-ink">{pct}%</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SingleClassify() {
   const [text, setText] = useState("");
   const [state, setState] = useState({ status: "idle", result: null, error: null });
 
@@ -24,14 +57,7 @@ export function Classify() {
   const tooLong = text.length > MAX_LEN;
 
   return (
-    <div className="animate-fade-up space-y-8">
-      <div>
-        <h1 className="font-display text-2xl text-ink">Coba Klasifikasi Emosi</h1>
-        <p className="mt-1 text-sm text-muted">
-          Tulis atau tempel sebuah review, lihat emosi yang terdeteksi secara langsung.
-        </p>
-      </div>
-
+    <div className="space-y-8">
       <div className="flex flex-wrap gap-2">
         {CLASSIFY_EXAMPLES.map((ex) => (
           <button
@@ -83,8 +109,42 @@ export function Classify() {
             <EmotionBadge emotion={state.result.label} size="lg" />
           </div>
           <ConfidenceBar value={state.result.confidence} emotion={state.result.label} />
+          <Probabilities probabilities={state.result.probabilities} />
         </div>
       )}
+    </div>
+  );
+}
+
+export function Classify() {
+  const [mode, setMode] = useState("single");
+
+  return (
+    <div className="animate-fade-up space-y-8">
+      <div>
+        <h1 className="font-display text-2xl text-ink">Coba Klasifikasi Emosi</h1>
+        <p className="mt-1 text-sm text-muted">
+          Tulis satu review, atau unggah banyak review sekaligus untuk melihat sebaran emosinya.
+        </p>
+      </div>
+
+      <div className="flex gap-1" role="tablist" aria-label="Mode klasifikasi">
+        {MODES.map((m) => (
+          <button
+            key={m.id}
+            role="tab"
+            aria-selected={mode === m.id}
+            onClick={() => setMode(m.id)}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+              mode === m.id ? "bg-ink text-paper" : "text-faint hover:text-muted"
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "single" ? <SingleClassify /> : <BatchClassify />}
     </div>
   );
 }

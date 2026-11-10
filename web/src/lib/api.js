@@ -42,7 +42,17 @@ export const api = {
   health: () => request("/health"),
   stats: () => request("/stats"),
   classify: (text) => request("/classify", { method: "POST", body: JSON.stringify({ text }) }),
-  insight: (query) => request("/insight", { method: "POST", body: JSON.stringify({ query }) }),
+  classifyBatch: (texts) =>
+    request("/classify/batch", { method: "POST", body: JSON.stringify({ texts }) }),
+  // `emotions` is an optional subset of ["anger", "sadness"]; empty = all negative.
+  insight: (query, emotions = []) =>
+    request("/insight", {
+      method: "POST",
+      body: JSON.stringify(emotions.length ? { query, emotions } : { query }),
+    }),
+  reviewsLookup: (ids) =>
+    request("/reviews/lookup", { method: "POST", body: JSON.stringify({ ids }) }),
+  monitoringSummary: () => request("/monitoring/summary"),
   chat: (question, history = []) =>
     request("/chat", { method: "POST", body: JSON.stringify({ question, history }) }),
 
@@ -57,6 +67,12 @@ export const api = {
     request(`/agent/approve/${encodeURIComponent(id)}`, {
       method: "POST",
       headers: reviewerHeaders(apiKey),
+    }),
+  agentEdit: (id, draft, apiKey) =>
+    request(`/agent/edit/${encodeURIComponent(id)}`, {
+      method: "POST",
+      headers: reviewerHeaders(apiKey),
+      body: JSON.stringify({ draft }),
     }),
   agentReject: (id, reason = "", apiKey) =>
     request(`/agent/reject/${encodeURIComponent(id)}`, {

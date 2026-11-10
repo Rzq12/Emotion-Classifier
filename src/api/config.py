@@ -25,6 +25,8 @@ class Settings:
     prediction_log_path: str = os.getenv(
         "PREDICTION_LOG_PATH", "data/monitoring/predictions.jsonl"
     )
+    # Reference data the live monitoring summary compares predictions against.
+    drift_reference_csv: str = os.getenv("DRIFT_REFERENCE_CSV", "data/processed/train.csv")
     agent_config: str = os.getenv("AGENT_CONFIG", "configs/agent.yaml")
     agent_queue_db: str = os.getenv("AGENT_QUEUE_DB", "agent_queue.db")
     # Required by approve/reject/notify-test (X-API-Key). Empty = those endpoints off.

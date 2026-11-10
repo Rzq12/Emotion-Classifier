@@ -20,6 +20,8 @@ from src.rag.retriever import HybridRetriever
 
 # Minimum reviews required before attempting a meaningful insight (UIUX_FLOW 3.2).
 MIN_REVIEWS_FOR_INSIGHT = 5
+# Verbatim reviews surfaced when the LLM is unavailable (degraded mode).
+FALLBACK_QUOTES = 5
 
 SAMPLE_NOTE = (
     "Statistik tema dihitung dari {n} review paling relevan dengan fokus ini, "
@@ -52,27 +54,41 @@ class InsightGenerator:
             ttl=self.config.cache_ttl_seconds,
         )
 
-    def _cache_key(self, query: str) -> str:
+    def _emotions(self, emotions: list[str] | None) -> list[str]:
+        """Resolve the emotion filter: a requested subset of the negative set."""
+        allowed = self.config.negative_emotions
+        selected = [e for e in allowed if e in (emotions or [])]
+        return selected or list(allowed)
+
+    def _cache_key(self, query: str, emotions: list[str]) -> str:
         # Include provider/model so switching LLMs never serves stale results.
         llm_id = f"{getattr(self.llm, 'provider', '?')}:{getattr(self.llm, 'model', '?')}"
-        raw = f"{llm_id}|{query}|{sorted(self.config.negative_emotions)}|{self.config.top_k}"
+        raw = f"{llm_id}|{query}|{sorted(emotions)}|{self.config.top_k}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def generate(self, query: str = "keluhan utama pengguna", use_cache: bool = True) -> dict:
+    def generate(
+        self,
+        query: str = "keluhan utama pengguna",
+        use_cache: bool = True,
+        emotions: list[str] | None = None,
+    ) -> dict:
         """Return a structured insight dict for the given focus query.
 
+        Args:
+            query: Focus of the insight (e.g. "masalah pembayaran").
+            use_cache: Serve/store the result in the TTL cache.
+            emotions: Optional subset of the negative emotions to retrieve from;
+                ``None`` uses all configured negative emotions.
+
         Result shape: ``{summary, themes[], sample_quotes[], recommendations[],
-        note, cached, n_reviews}``.
+        note, cached, n_reviews, emotions, degraded}``.
         """
-        key = self._cache_key(query)
+        selected = self._emotions(emotions)
+        key = self._cache_key(query, selected)
         if use_cache and key in self._cache:
             return {**self._cache[key], "cached": True}
 
-        reviews = self.retriever.query(
-            query,
-            n_results=self.config.top_k,
-            emotions=self.config.negative_emotions,
-        )
+        reviews = self.retriever.query(query, n_results=self.config.top_k, emotions=selected)
 
         if len(reviews) < MIN_REVIEWS_FOR_INSIGHT:
             return {
@@ -83,6 +99,8 @@ class InsightGenerator:
                 "note": "",
                 "cached": False,
                 "n_reviews": len(reviews),
+                "emotions": selected,
+                "degraded": False,
             }
 
         prompt = render_prompt("insight.txt", reviews=format_reviews(reviews))
@@ -96,10 +114,40 @@ class InsightGenerator:
         result["note"] = SAMPLE_NOTE.format(n=len(reviews))
         result["cached"] = False
         result["n_reviews"] = len(reviews)
+        result["emotions"] = selected
+        result["degraded"] = False
 
         if use_cache:
             self._cache[key] = {k: v for k, v in result.items() if k != "cached"}
         return result
+
+    def fallback(self, query: str, emotions: list[str] | None = None) -> dict:
+        """LLM-free degraded insight: the most relevant negative reviews, verbatim.
+
+        Used when the LLM call fails. Nothing is summarized or invented — the
+        caller gets real retrieved reviews and an explicit ``degraded`` flag.
+        Never cached, so the next request retries the LLM.
+        """
+        selected = self._emotions(emotions)
+        reviews = self.retriever.query(query, n_results=self.config.top_k, emotions=selected)
+        quotes = [r.text for r in reviews[:FALLBACK_QUOTES]]
+        return {
+            "summary": (
+                "Layanan LLM sedang tidak tersedia, jadi ringkasan otomatis belum bisa dibuat. "
+                f"Berikut {len(quotes)} review negatif paling relevan dengan fokus ini."
+                if quotes
+                else "Layanan LLM sedang tidak tersedia dan tidak ada review yang cocok."
+            ),
+            "themes": [],
+            "sample_quotes": quotes,
+            "recommendations": [],
+            "note": "Mode terdegradasi: kutipan diambil langsung dari hasil retrieval, "
+            "tanpa peringkasan LLM.",
+            "cached": False,
+            "n_reviews": len(reviews),
+            "emotions": selected,
+            "degraded": True,
+        }
 
 
 def _validate_example_ids(result: dict, retrieved_ids: set[str]) -> None:

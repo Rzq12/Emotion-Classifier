@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
+import pandas as pd
 import yaml
 
 from src.agent.config import AgentConfig
@@ -15,7 +17,7 @@ from src.api.classifier import EmotionClassifier
 from src.api.config import get_settings
 from src.llm.base import LLMClient
 from src.llm.factory import get_llm_client
-from src.monitoring.prediction_log import PredictionLogger
+from src.monitoring.prediction_log import PredictionLogger, read_predictions
 from src.rag.bm25 import BM25Index
 from src.rag.chat import ChatConfig, ChatResponder
 from src.rag.corpus import load_reviews
@@ -23,6 +25,11 @@ from src.rag.embeddings import Embedder
 from src.rag.insight import InsightConfig, InsightGenerator
 from src.rag.retriever import HybridRetriever
 from src.rag.vector_store import ReviewVectorStore
+
+logger = logging.getLogger(__name__)
+
+#: Only the most recent predictions feed the live monitoring summary.
+MAX_MONITORING_RECORDS = 5000
 
 
 @lru_cache
@@ -58,9 +65,43 @@ def get_llm() -> LLMClient:
     return get_llm_client(get_settings().llm_provider)
 
 
+def get_prediction_records() -> list[dict]:
+    """Most recent logged predictions (read fresh on every request)."""
+    return read_predictions(get_settings().prediction_log_path)[-MAX_MONITORING_RECORDS:]
+
+
+@lru_cache
+def get_drift_reference() -> pd.DataFrame | None:
+    """Training data used as the drift reference, or ``None`` if unavailable."""
+    path = get_settings().drift_reference_csv
+    try:
+        return pd.read_csv(path, usecols=["text", "label"])
+    except (OSError, ValueError) as exc:
+        logger.warning("Drift reference '%s' unavailable: %s", path, exc)
+        return None
+
+
+@lru_cache
+def _corpus() -> pd.DataFrame:
+    """The indexed review corpus, shared by BM25 and the review lookup."""
+    return load_reviews(_rag_cfg()["data"]["csvs"])
+
+
+@lru_cache
+def get_review_catalog() -> dict[str, dict]:
+    """Map ``review_id`` -> ``{text, emotion}`` for resolving cited sources."""
+    reviews = _corpus()
+    return {
+        review_id: {"text": text, "emotion": emotion}
+        for review_id, text, emotion in zip(
+            reviews["review_id"], reviews["text"], reviews["label"], strict=True
+        )
+    }
+
+
 @lru_cache
 def get_bm25() -> BM25Index:
-    reviews = load_reviews(_rag_cfg()["data"]["csvs"])
+    reviews = _corpus()
     index = BM25Index()
     index.fit(
         ids=reviews["review_id"].tolist(),

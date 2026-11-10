@@ -2,7 +2,7 @@
 
 Grouped under an ``APIRouter`` (prefix ``/agent``) rather than inflating
 ``main``. ``/agent/run`` calls the LLM so it is rate limited like the other
-LLM endpoints. Reviewer actions (approve/reject/notify-test) change state or
+LLM endpoints. Reviewer actions (approve/reject/edit/notify-test) change state or
 send real notifications, so they require ``X-API-Key`` (see ``security``).
 
 This module intentionally avoids ``from __future__ import annotations`` so
@@ -123,6 +123,22 @@ def agent_reject(
     """Reject a pending draft, recording the reviewer's reason."""
     ticket = _resolve_ticket(lambda: queue.reject(ticket_id, reason=body.reason))
     return schemas.AgentRunResponse(ticket=_to_response(ticket), notified=False)
+
+
+@router.post(
+    "/edit/{ticket_id}",
+    response_model=schemas.TicketResponse,
+    summary="Edit draft sebelum disetujui (butuh X-API-Key)",
+    dependencies=REVIEWER_ONLY,
+)
+def agent_edit(
+    ticket_id: str, body: schemas.EditDraftRequest, queue: QueueDep
+) -> schemas.TicketResponse:
+    """Replace the draft of a pending ticket with the reviewer's edited text."""
+    draft = body.draft.strip()
+    if not draft:
+        raise HTTPException(status_code=422, detail="Draft tidak boleh kosong.")
+    return _to_response(_resolve_ticket(lambda: queue.update_draft(ticket_id, draft)))
 
 
 @router.get("/stats", response_model=schemas.AgentStatsResponse, summary="Metrik agent")

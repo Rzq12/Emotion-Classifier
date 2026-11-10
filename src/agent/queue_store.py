@@ -5,7 +5,8 @@ reject drafts through the API. Deliberately a single-file SQLite database
 (``agent_queue.db``), matching the lightweight storage style already used for
 ``mlflow.db`` — no separate service to run for a portfolio demo.
 
-Status lifecycle: ``pending`` -> ``approved`` | ``rejected`` (terminal).
+Status lifecycle: ``pending`` -> ``approved`` | ``rejected`` (terminal). A
+reviewer may edit the draft while the ticket is still ``pending``.
 """
 
 from __future__ import annotations
@@ -165,6 +166,23 @@ class QueueStore:
     def reject(self, ticket_id: str, reason: str = "") -> Ticket:
         """Mark a pending ticket rejected, recording the reason."""
         return self._resolve(ticket_id, "rejected", reason=reason)
+
+    def update_draft(self, ticket_id: str, draft: str) -> Ticket:
+        """Replace the draft of a pending ticket. Raises if not pending."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+            if row is None:
+                raise TicketNotFoundError(ticket_id)
+            if row["status"] != "pending":
+                raise InvalidTransitionError(
+                    f"Ticket {ticket_id} is '{row['status']}', draft can no longer be edited."
+                )
+            conn.execute(
+                "UPDATE tickets SET draft = ?, updated_at = ? WHERE id = ?",
+                (draft, _now(), ticket_id),
+            )
+            row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+        return _row_to_ticket(row)
 
     def _resolve(self, ticket_id: str, status: str, reason: str) -> Ticket:
         with self._lock, self._connect() as conn:

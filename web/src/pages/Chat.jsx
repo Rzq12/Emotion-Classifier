@@ -2,39 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { CHAT_SUGGESTIONS } from "../lib/constants";
 import { Spinner } from "../components/States";
-
-function Sources({ ids }) {
-  const [open, setOpen] = useState(false);
-  if (!ids?.length) return null;
-  return (
-    <div className="mt-2">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="text-xs text-faint underline underline-offset-2 hover:text-muted"
-        aria-expanded={open}
-      >
-        Sumber: {ids.length} review terkait
-      </button>
-      {open && (
-        <p className="mt-1 font-mono text-xs text-faint">{ids.join(", ")}</p>
-      )}
-    </div>
-  );
-}
+import { ReviewSources } from "../components/ReviewSources";
 
 function Bubble({ msg }) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+        className={`max-w-[85%] whitespace-pre-line rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
           isUser
             ? "rounded-br-sm bg-ink text-paper"
             : "rounded-bl-sm border border-line bg-surface text-ink"
         }`}
       >
         {msg.error ? <span className="text-anger">{msg.content}</span> : msg.content}
-        {!isUser && !msg.error && <Sources ids={msg.sources} />}
+        {msg.degraded && (
+          <p className="mt-2 text-xs text-anger">Tanpa LLM: review ditampilkan apa adanya.</p>
+        )}
+        {!isUser && !msg.error && (
+          <ReviewSources ids={msg.sources} label={`Sumber: ${msg.sources?.length} review terkait`} />
+        )}
       </div>
     </div>
   );
@@ -55,7 +42,7 @@ export function Chat() {
     if (!question || loading) return;
     // Last 6 turns as context so follow-up questions stay coherent.
     const history = messages
-      .filter((m) => !m.error)
+      .filter((m) => !m.error && !m.degraded)
       .slice(-6)
       .map((m) => ({ role: m.role, content: m.content }));
     setMessages((m) => [...m, { role: "user", content: question }]);
@@ -64,7 +51,10 @@ export function Chat() {
     api
       .chat(question, history)
       .then((res) =>
-        setMessages((m) => [...m, { role: "bot", content: res.answer, sources: res.sources }]),
+        setMessages((m) => [
+          ...m,
+          { role: "bot", content: res.answer, sources: res.sources, degraded: res.degraded },
+        ]),
       )
       .catch((e) => setMessages((m) => [...m, { role: "bot", content: e.message, error: true }]))
       .finally(() => setLoading(false));

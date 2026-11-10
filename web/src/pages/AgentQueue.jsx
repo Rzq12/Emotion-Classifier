@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { AGENT_EXAMPLES, branchMeta, STATUS_LABELS } from "../lib/constants";
 import { EmotionBadge } from "../components/EmotionBadge";
 import { Spinner, ErrorState, EmptyState, LoadingBlock } from "../components/States";
+import { ReviewSources } from "../components/ReviewSources";
 
 const FILTERS = [
   { id: "", label: "Semua" },
@@ -60,8 +61,18 @@ function StatStrip({ stats }) {
   );
 }
 
-function TicketCard({ ticket, onApprove, onReject, busy }) {
+function TicketCard({ ticket, onApprove, onReject, onEdit, busy }) {
   const isPending = ticket.status === "pending";
+  const [editing, setEditing] = useState(false);
+  const [draftText, setDraftText] = useState(ticket.draft);
+
+  const startEdit = () => {
+    setDraftText(ticket.draft);
+    setEditing(true);
+  };
+  const saveEdit = () =>
+    onEdit(ticket.id, draftText.trim()).then((saved) => saved && setEditing(false));
+
   return (
     <div className="animate-fade-up rounded-lg border border-line bg-surface p-5">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -80,13 +91,60 @@ function TicketCard({ ticket, onApprove, onReject, busy }) {
 
       {ticket.draft && (
         <div className="mt-3 rounded-md border border-line bg-paper/60 p-3">
-          <div className="mb-1 text-xs uppercase tracking-wide text-faint">Draft balasan</div>
-          <p className="text-sm text-muted">{ticket.draft}</p>
-          {ticket.grounding_ids?.length > 0 && (
-            <p className="mt-2 font-mono text-xs text-faint">
-              grounding: {ticket.grounding_ids.join(", ")}
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <label
+              htmlFor={`draft-${ticket.id}`}
+              className="text-xs uppercase tracking-wide text-faint"
+            >
+              Draft balasan
+            </label>
+            {isPending && !editing && (
+              <button
+                onClick={startEdit}
+                disabled={busy}
+                className="text-xs text-faint underline underline-offset-2 hover:text-muted disabled:opacity-40"
+              >
+                Edit draft
+              </button>
+            )}
+          </div>
+          {editing ? (
+            <>
+              <textarea
+                id={`draft-${ticket.id}`}
+                value={draftText}
+                onChange={(e) => setDraftText(e.target.value)}
+                rows={4}
+                maxLength={2000}
+                className="w-full resize-y rounded-md border border-line bg-surface p-3 text-sm text-ink focus:border-ink"
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={saveEdit}
+                  disabled={busy || !draftText.trim() || draftText.trim() === ticket.draft}
+                  className="inline-flex items-center gap-2 rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-paper transition-opacity disabled:opacity-40"
+                >
+                  {busy && <Spinner className="h-3 w-3" />}
+                  Simpan draft
+                </button>
+                <button
+                  onClick={() => setEditing(false)}
+                  disabled={busy}
+                  className="rounded-md border border-line px-3 py-1.5 text-xs font-medium text-muted disabled:opacity-40"
+                >
+                  Batal
+                </button>
+              </div>
+            </>
+          ) : (
+            <p id={`draft-${ticket.id}`} className="whitespace-pre-line text-sm text-muted">
+              {ticket.draft}
             </p>
           )}
+          <ReviewSources
+            ids={ticket.grounding_ids}
+            label={`Grounding: ${ticket.grounding_ids?.length} review`}
+          />
         </div>
       )}
 
@@ -94,7 +152,7 @@ function TicketCard({ ticket, onApprove, onReject, busy }) {
         <p className="mt-2 text-xs italic text-anger">Alasan ditolak: {ticket.reason}</p>
       )}
 
-      {isPending && (
+      {isPending && !editing && (
         <div className="mt-4 flex gap-2">
           <button
             onClick={() => onApprove(ticket.id)}
@@ -150,12 +208,12 @@ function ReviewerKey({ value, onChange }) {
         autoComplete="off"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Diperlukan untuk Setujui / Tolak"
+        placeholder="Diperlukan untuk Edit / Setujui / Tolak"
         className="mt-1.5 w-full rounded-md border border-line bg-paper/60 px-3 py-2 font-mono text-sm text-ink placeholder:text-faint focus:border-ink sm:max-w-sm"
       />
       <p className="mt-1.5 text-xs text-faint">
-        Menjalankan agent dan melihat antrean terbuka untuk publik. Menyetujui atau menolak draft
-        hanya untuk reviewer. Key disimpan di tab ini saja.
+        Menjalankan agent dan melihat antrean terbuka untuk publik. Mengedit, menyetujui, atau
+        menolak draft hanya untuk reviewer. Key disimpan di tab ini saja.
       </p>
     </div>
   );
@@ -208,20 +266,30 @@ export function AgentQueue() {
       .finally(() => setRunning(false));
   };
 
+  // Resolves to true when the action succeeded, so callers can close editors.
   const reviewerAction = (id, call) => {
     if (!reviewerKey.trim()) {
-      setActionError("Isi API key reviewer dulu untuk menyetujui atau menolak draft.");
-      return;
+      setActionError("Isi API key reviewer dulu untuk mengedit, menyetujui, atau menolak draft.");
+      return Promise.resolve(false);
     }
     setBusyId(id);
     setActionError(null);
-    call()
-      .then(load)
-      .catch((e) => setActionError(e.message))
+    return call()
+      .then(() => {
+        load();
+        return true;
+      })
+      .catch((e) => {
+        setActionError(e.message);
+        return false;
+      })
       .finally(() => setBusyId(null));
   };
 
   const approve = (id) => reviewerAction(id, () => api.agentApprove(id, reviewerKey.trim()));
+
+  const editDraft = (id, draft) =>
+    reviewerAction(id, () => api.agentEdit(id, draft, reviewerKey.trim()));
 
   const reject = (id) => {
     if (!reviewerKey.trim()) {
@@ -331,6 +399,7 @@ export function AgentQueue() {
               ticket={t}
               onApprove={approve}
               onReject={reject}
+              onEdit={editDraft}
               busy={busyId === t.id}
             />
           ))}

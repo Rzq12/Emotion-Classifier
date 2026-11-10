@@ -17,6 +17,7 @@ export const TABS = [
   { id: "insight", label: "Insight" },
   { id: "chat", label: "Tanya Data" },
   { id: "agent", label: "Agent Queue" },
+  { id: "monitoring", label: "Monitoring" },
 ];
 
 // Router branch semantics for the agent queue (color always paired with label).

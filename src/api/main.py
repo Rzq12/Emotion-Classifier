@@ -1,13 +1,17 @@
 """FastAPI application for Indo Review Intelligence.
 
-Endpoints (SYSTEM_DESIGN §4): /classify, /insight, /chat, /health.
+Endpoints (SYSTEM_DESIGN §4): /classify (+ /classify/batch), /insight, /chat,
+/health, plus the /reviews, /monitoring and /agent routers.
 LLM-calling endpoints are rate limited to control cost; CORS is restricted to
-configured origins. LLM failures degrade gracefully to a 503 with a clear message.
+configured origins. When the LLM fails, /insight and /chat degrade to verbatim
+retrieved reviews (``degraded: true``); any other LLMError becomes a clear 503.
 
 Note: this module intentionally avoids ``from __future__ import annotations`` so
 FastAPI can resolve body/dependency types through the slowapi rate-limit wrapper.
 """
 
+import logging
+from collections import Counter
 from typing import Annotated
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
@@ -31,11 +35,16 @@ from src.api.dependencies import (
     get_vector_store,
 )
 from src.api.limiter import RATE, limiter
+from src.api.monitoring_routes import router as monitoring_router
+from src.api.review_routes import router as review_router
+from src.data.labels import LABELS
 from src.llm.base import LLMClient, LLMError
 from src.monitoring.prediction_log import PredictionLogger
 from src.rag.chat import ChatResponder
 from src.rag.insight import InsightGenerator
 from src.rag.vector_store import ReviewVectorStore
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 _rate = RATE
@@ -51,6 +60,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(agent_router)
+app.include_router(review_router)
+app.include_router(monitoring_router)
 
 # Dependency aliases (Annotated style avoids B008 and reads cleanly).
 ClassifierDep = Annotated[EmotionClassifier, Depends(get_classifier)]
@@ -113,12 +124,51 @@ def classify(
     return schemas.ClassifyResponse(**result)
 
 
+@app.post(
+    "/classify/batch",
+    response_model=schemas.ClassifyBatchResponse,
+    summary="Klasifikasi banyak review sekaligus",
+)
+@limiter.limit(_rate)
+def classify_batch(
+    request: Request,
+    body: schemas.ClassifyBatchRequest,
+    background_tasks: BackgroundTasks,
+    classifier: ClassifierDep,
+    prediction_logger: PredictionLoggerDep,
+) -> schemas.ClassifyBatchResponse:
+    """Classify up to ``MAX_BATCH_SIZE`` reviews; rate limited (CPU-heavy)."""
+    try:
+        predictions = classifier.predict_batch(body.texts)
+    except ModelNotFoundError as exc:
+        raise HTTPException(status_code=503, detail="Model classifier belum tersedia.") from exc
+
+    results = [
+        schemas.ClassifyBatchItem(text=text, **prediction)
+        for text, prediction in zip(body.texts, predictions, strict=True)
+    ]
+    for item in results:
+        background_tasks.add_task(prediction_logger.log, item.text, item.label, item.confidence)
+
+    counts = Counter(item.label for item in results)
+    return schemas.ClassifyBatchResponse(
+        results=results,
+        count=len(results),
+        by_emotion={label: counts.get(label, 0) for label in LABELS},
+    )
+
+
 @app.post("/insight", response_model=schemas.InsightResponse)
 @limiter.limit(_rate)
 def insight(
     request: Request, body: schemas.InsightRequest, generator: InsightDep
 ) -> schemas.InsightResponse:
-    result = generator.generate(body.query, use_cache=body.use_cache)
+    try:
+        result = generator.generate(body.query, use_cache=body.use_cache, emotions=body.emotions)
+    except LLMError as exc:
+        # Degraded mode: real retrieved reviews instead of a 503 (PRD 6.4 v1.2).
+        logger.warning("LLM unavailable for /insight, serving degraded result: %s", exc)
+        result = generator.fallback(body.query, emotions=body.emotions)
     return schemas.InsightResponse(**result)
 
 
@@ -126,4 +176,9 @@ def insight(
 @limiter.limit(_rate)
 def chat(request: Request, body: schemas.ChatRequest, responder: ChatDep) -> schemas.ChatResponse:
     history = [m.model_dump() for m in body.history]
-    return schemas.ChatResponse(**responder.answer(body.question, history=history))
+    try:
+        result = responder.answer(body.question, history=history)
+    except LLMError as exc:
+        logger.warning("LLM unavailable for /chat, serving degraded answer: %s", exc)
+        result = responder.fallback(body.question)
+    return schemas.ChatResponse(**result)

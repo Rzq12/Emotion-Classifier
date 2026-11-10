@@ -65,7 +65,11 @@ dibatasi classifier (bukan threshold router) dibahas di `EXPERIMENTS.md`.
 - **Insight generator:** ringkasan terstruktur (tema keluhan, kutipan, rekomendasi)
   dari review beremosi negatif, di-grounding ke data dan di-cache.
 - **Chatbot internal:** menjawab pertanyaan bebas dengan grounding ke review
-  ter-retrieve (anti-halusinasi) dan menyertakan sumber.
+  ter-retrieve (anti-halusinasi) dan menyertakan sumber yang bisa dibaca.
+- **Klasifikasi batch:** unggah CSV/TXT (maks. 100 review) → sebaran emosi +
+  hasil per review yang bisa diunduh.
+- **Monitoring live:** ringkasan prediksi + status drift (PSI) di tab Monitoring
+  dan pengecekan mingguan lewat GitHub Actions.
 - **Agentic layer (LangGraph):** classifier jadi salah satu _tool_ dalam state
   graph yang me-_route_ review (eskalasi / draft empati / arsip) berdasarkan
   confidence, membuat draft balasan yang di-_grounding_ ke RAG, dan menyimpan ke
@@ -174,9 +178,19 @@ Endpoint:
 | ------ | ----------- | --------------------------------------------------------------- |
 | GET    | `/health`   | Status model, vector DB, LLM provider                           |
 | GET    | `/stats`    | Statistik dataset (distribusi emosi, per-split) untuk dashboard |
-| POST   | `/classify` | `{text}` → `{label, confidence}`                                |
-| POST   | `/insight`  | `{query}` → ringkasan terstruktur (rate-limited)                |
+| POST   | `/classify` | `{text}` → `{label, confidence, probabilities}`                 |
+| POST   | `/classify/batch` | `{texts[]}` (maks. 100) → hasil per teks + `by_emotion` (rate-limited) |
+| POST   | `/insight`  | `{query, emotions?}` → ringkasan terstruktur (rate-limited)     |
 | POST   | `/chat`     | `{question}` → `{answer, sources}` (rate-limited)               |
+| POST   | `/reviews/lookup` | `{ids[]}` (maks. 50) → teks + emosi review yang dikutip sebagai sumber |
+| GET    | `/monitoring/summary` | Ringkasan log prediksi live + status drift (PSI) vs data training |
+
+`emotions` di `/insight` adalah filter kategori (`anger` / `sadness`); filter
+periode tidak tersedia karena dataset tidak punya timestamp.
+
+**Mode terdegradasi:** jika panggilan LLM gagal, `/insight` dan `/chat` tidak
+mengembalikan 503 melainkan review hasil retrieval apa adanya dengan
+`degraded: true` — tetap berbasis data nyata, tanpa ringkasan buatan.
 
 Docs interaktif tersedia di `/docs`. CORS dan rate limit dikonfigurasi via env
 (`CORS_ALLOW_ORIGINS`, `RATE_LIMIT_PER_MINUTE`). Build image: `docker build -t indo-review-api .`
@@ -212,6 +226,7 @@ START → classify → route_by_emotion ─┬─ escalate  (anger, confidence t
 | GET    | `/agent/queue`         | List tiket (filter `?status=pending\|approved\|rejected`)     |
 | POST   | `/agent/approve/{id}`  | 🔒 Setujui draft → kirim notifikasi                 |
 | POST   | `/agent/reject/{id}`   | 🔒 `{reason}` → tolak draft, catat alasan           |
+| POST   | `/agent/edit/{id}`     | 🔒 `{draft}` → ganti draft tiket yang masih `pending` |
 | GET    | `/agent/stats`         | Metrik antrean (escalation count, approval rate)    |
 | GET    | `/agent/notify-test`   | 🔒 Kirim pesan uji Telegram + diagnosis pengiriman  |
 
@@ -248,8 +263,12 @@ Space restart/redeploy. Untuk demo ini cukup; untuk produksi pindahkan
 
 ## Frontend (web/)
 
-Aplikasi React + Vite dengan 5 tab: Dashboard (distribusi emosi), Coba Klasifikasi,
-Insight, Tanya Data (chat), dan **Agent Queue** (demo agent + approval tiket).
+Aplikasi React + Vite dengan 6 tab: Dashboard (distribusi emosi), Coba Klasifikasi
+(satu review atau unggah CSV/TXT hingga 100 review, hasil bisa diunduh), Insight
+(dengan filter emosi), Tanya Data (chat), **Agent Queue** (demo agent, edit draft,
+approval tiket), dan **Monitoring** (prediksi live + status drift). Di Insight,
+Chat, dan Agent Queue, sumber/grounding bisa dibuka untuk membaca teks review
+aslinya, bukan hanya ID.
 
 ```bash
 cd web
@@ -266,7 +285,19 @@ Setiap prediksi `/classify` otomatis di-log (timestamp, teks, label, confidence)
 ke JSONL — path via env `PREDICTION_LOG_PATH` (default
 `data/monitoring/predictions.jsonl`), ditulis non-blocking setelah response.
 
-Drift check dijalankan manual:
+**Live:** `GET /monitoring/summary` merangkum log itu (jumlah prediksi, sebaran
+label, confidence, volume harian) dan membandingkannya dengan data training
+(`DRIFT_REFERENCE_CSV`). Verdict drift baru dihitung setelah ≥30 prediksi — PSI
+atas sampel kecil tidak bermakna. Hasilnya tampil di tab **Monitoring**; teks
+review di log tidak pernah dikirim ke klien.
+
+**Terjadwal:** `.github/workflows/drift-check.yml` menarik ringkasan yang sama
+tiap Senin dan menggagalkan run jika verdict `DRIFT`. Workflow memakai secret
+`HF_SPACE_URL` sebagai base URL API (mis. `https://<user>-<space>.hf.space`).
+Catatan: log prediksi di HF Spaces free tier hilang saat Space restart, jadi
+jendela pengamatannya hanya sejak restart terakhir.
+
+Drift check juga bisa dijalankan manual:
 
 ```bash
 python -m src.monitoring.check_drift              # log prediksi vs train.csv

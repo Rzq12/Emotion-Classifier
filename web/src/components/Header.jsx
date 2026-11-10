@@ -33,7 +33,7 @@ export function Header({ active, onChange, health }) {
         <HealthDot health={health} />
       </div>
 
-      <nav className="mx-auto flex max-w-5xl gap-1 px-3" aria-label="Navigasi utama">
+      <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-3" aria-label="Navigasi utama">
         {TABS.map((tab) => {
           const isActive = active === tab.id;
           return (
@@ -41,7 +41,7 @@ export function Header({ active, onChange, health }) {
               key={tab.id}
               onClick={() => onChange(tab.id)}
               aria-current={isActive ? "page" : undefined}
-              className={`relative px-3 py-3 text-sm font-medium transition-colors ${
+              className={`relative shrink-0 whitespace-nowrap px-3 py-3 text-sm font-medium transition-colors ${
                 isActive ? "text-ink" : "text-faint hover:text-muted"
               }`}
             >
